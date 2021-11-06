@@ -1,3 +1,4 @@
+import pandas, numpy
 def get_neighbors(df,current_id,horizon):
     distance=((df.coordx-df.loc[current_id].coordx)**2+(df.coordy-df.loc[current_id].coordy)**2)**0.5
     neighbor_ids = distance[distance<=horizon].index
@@ -57,8 +58,83 @@ def construct_dfn(idist,nlength,stretch,fac_volume_corr,Lambda,Dilatation,SED):
     dfn[Dilatation.name]=Dilatation
     dfn[SED.name]=SED
     return dfn
-	
-def set_surface_correction_factors(df,current_id,condition,disp_grad,SED):
+
+def set_loading_condition(condition,df,applied,delta):
+    if condition == 'uniaxial stretch x':
+        for id in df.index:
+            df.loc[id].dispx = applied* df.loc[id].coordx
+            df.loc[id].dispy = 0.
+            df.loc[id].bforcex = 0.
+            df.loc[id].bforcey = 0.   
+            df.loc[id].velx = 0.
+            df.loc[id].vely = 0.
+            df.loc[id].velhalfx = 0.
+            df.loc[id].velhalfy = 0.
+            df.loc[id].velhalfoldx= 0.
+            df.loc[id].velhalfoldy= 0.
+    if condition == 'uniaxial stretch y':
+        for id in df.index:
+            df.loc[id].dispx = 0.
+            df.loc[id].dispy = applied* df.loc[id].coordy
+            df.loc[id].bforcex = 0.
+            df.loc[id].bforcey = 0.   
+            df.loc[id].velx = 0.
+            df.loc[id].vely = 0.
+            df.loc[id].velhalfx = 0.
+            df.loc[id].velhalfy = 0.
+            df.loc[id].velhalfoldx= 0.
+            df.loc[id].velhalfoldy= 0.
+    if condition == 'simple shear in x-y':
+        for id in df.index:
+            df.loc[id].dispx = 0.5*applied* df.loc[id].coordx
+            df.loc[id].dispy = -0.5*applied* df.loc[id].coordy
+            df.loc[id].bforcex = 0.
+            df.loc[id].bforcey = 0.   
+            df.loc[id].velx = 0.
+            df.loc[id].vely = 0.
+            df.loc[id].velhalfx = 0.
+            df.loc[id].velhalfy = 0.
+            df.loc[id].velhalfoldx= 0.
+            df.loc[id].velhalfoldy= 0.
+    if condition == 'uniaxial tensile loading':
+        appres = applied
+        left_bound=df[df.coordx==df.coordx.min()].index
+        for id in left_bound:
+            df.loc[id].bforcex = -1*appres/delta
+            df.loc[id].bforcey = 0.
+            df.loc[id].dispx = 0.
+            df.loc[id].dispy = 0.
+            df.loc[id].velx = 0.
+            df.loc[id].vely = 0.
+            df.loc[id].velhalfx = 0.
+            df.loc[id].velhalfy = 0.
+            df.loc[id].velhalfoldx= 0.
+            df.loc[id].velhalfoldy= 0.
+        right_bound=df[df.coordx==df.coordx.max()].index
+        for id in right_bound:
+            df.loc[id].bforcex = 1*appres/delta
+            df.loc[id].bforcey = 0.
+            df.loc[id].dispx = 0.
+            df.loc[id].dispy = 0.
+            df.loc[id].velx = 0.
+            df.loc[id].vely = 0.
+            df.loc[id].velhalfx = 0.
+            df.loc[id].velhalfy = 0.
+            df.loc[id].velhalfoldx= 0.
+            df.loc[id].velhalfoldy= 0.
+        for id in df.drop(index=left_bound).drop(index=right_bound).index:
+            df.loc[id].bforcex = 0.
+            df.loc[id].bforcey = 0.
+            df.loc[id].dispx = 0.
+            df.loc[id].dispy = 0.
+            df.loc[id].velx = 0.
+            df.loc[id].vely = 0.
+            df.loc[id].velhalfx = 0.
+            df.loc[id].velhalfy = 0.
+            df.loc[id].velhalfoldx= 0.
+            df.loc[id].velhalfoldy= 0.
+
+def set_surface_correction_factors(df,current_id,condition,disp_grad,SED,mu):
     if condition=='uniaxial stretch x':
         df.loc[current_id].D1 = disp_grad / df.loc[current_id].Dilatation
         df.loc[current_id].Dilatation = df.loc[current_id].Dilatation *df.loc[current_id].D1 
@@ -70,9 +146,9 @@ def set_surface_correction_factors(df,current_id,condition,disp_grad,SED):
         df.loc[current_id].S2 = 0.5*disp_grad**2*mu / SED.sum()
         df.loc[current_id].SED = SED.sum()*df.loc[current_id].S1
 
-def preprocess(df,condition_list,disp_grad):
+def preprocess(df,condition_list,disp_grad,horizon,delta,a,b,d,mu):
     for condition in condition_list:
-        set_loading_condition(condition,df,disp_grad)
+        set_loading_condition(condition,df,disp_grad,delta)
         for current_id in df.index:
             neighbor_ids,idist=get_neighbors(df,current_id,horizon)
             nlength=compute_nlength(df,current_id,neighbor_ids)
@@ -84,7 +160,7 @@ def preprocess(df,condition_list,disp_grad):
             SED=compute_SED(df,current_id,neighbor_ids,nlength,idist,fac_volume_corr,horizon,b,Dilatation,a)
             df.loc[current_id].SED = a*Dilatation.sum()**2 + SED.sum()
             dfn=construct_dfn(idist,nlength,stretch,fac_volume_corr,Lambda,Dilatation,SED)
-            set_surface_correction_factors(df,current_id,condition,disp_grad,SED)
+            set_surface_correction_factors(df,current_id,condition,disp_grad,SED,mu)
 
 def surface_correction_vector(df,current_id,neighbor_ids,idist):
     gdx=(df.loc[current_id].D1 + df.loc[neighbor_ids].D1)*0.5
@@ -95,9 +171,9 @@ def surface_correction_vector(df,current_id,neighbor_ids,idist):
     ny=(df.loc[neighbor_ids].coordy-df.loc[current_id].coordy)/idist
     Gd=((nx/gdx)**2+(ny/gdy)**2)**-0.5
     Gb=((nx/gbx)**2+(ny/gby)**2)**-0.5
-    return Gd,Gd
+    return Gd,Gb
 
-def preprocess_with_SCF(df):
+def preprocess_with_SCF(df,horizon,delta,a,b,d):
     for current_id in df.index:
         neighbor_ids,idist=get_neighbors(df,current_id,horizon)
         Gd, Gb =surface_correction_vector(df,current_id,neighbor_ids,idist)
@@ -113,7 +189,7 @@ def preprocess_with_SCF(df):
         df.loc[current_id].SED = a*Dilatation.sum()**2 + SED.sum()
         dfn=construct_dfn(idist,nlength,stretch,fac_volume_corr,Lambda,Dilatation,SED)
 
-def compute_PD_forces(df,current_id,neighbor_ids,idist,nlength,stretch,fac_volume_corr,Lambda):
+def compute_PD_forces(df,current_id,neighbor_ids,idist,nlength,stretch,fac_volume_corr,Lambda,horizon,a,b,d):
     A = 2*horizon*(d*Lambda/idist*(a*df.loc[current_id].Dilatation)+b*(stretch))
     A.name = 'A'
     B = 2*horizon*(d*Lambda/idist*(a*df.loc[neighbor_ids].Dilatation)+b*(stretch))
@@ -127,7 +203,7 @@ def compute_PD_forces(df,current_id,neighbor_ids,idist,nlength,stretch,fac_volum
     pforcey = ((tkjy-tjky)*fac_volume_corr*df.loc[neighbor_ids].volume).sum()
     return pforcex, pforcey
 	
-def compute_stable_mass_vector(df,horizon,current_id,neighbor_ids,idist,fac_volume_corr,dt,a,b,safety_factor):
+def compute_stable_mass_vector(df,horizon,current_id,neighbor_ids,idist,fac_volume_corr,dt,a,b,d,safety_factor):
     Kijx = numpy.abs(df.loc[neighbor_ids].coordx-df.loc[current_id].coordx)/idist/idist * 4 * horizon * (0.5 * a * d**2 * horizon / idist * (df.loc[current_id].volume + df.loc[neighbor_ids].volume*fac_volume_corr)+b)
     Kijy = numpy.abs(df.loc[neighbor_ids].coordy-df.loc[current_id].coordy)/idist/idist * 4 * horizon * (0.5 * a * d**2 * horizon / idist * (df.loc[current_id].volume + df.loc[neighbor_ids].volume*fac_volume_corr)+b)
     massvecx = safety_factor*0.25*dt**2*Kijx.sum()
@@ -175,12 +251,12 @@ def apply_ADR(df,tt,dt,cn):
         df.loc[current_id].pforceoldx = df.loc[current_id].pforcex
         df.loc[current_id].pforceoldy = df.loc[current_id].pforcey
 	
-def iterate(df,ibcs,dt,max_iter,applied):
-    set_loading_condition(ibcs,df,applied)
+def iterate(df,ibcs,dt,max_iter,applied,horizon,delta,a,b,d):
+    set_loading_condition(ibcs,df,applied,delta)
     for tt in range(1,max_iter+dt,dt):
         if numpy.mod(tt,50)==0:
             print(df)
-        preprocess_with_SCF(df)
+        preprocess_with_SCF(df,horizon,delta,a,b,d)
         print(tt)
         for current_id in df.index:
             neighbor_ids,idist=get_neighbors(df,current_id,horizon)
@@ -188,10 +264,10 @@ def iterate(df,ibcs,dt,max_iter,applied):
             stretch=compute_stretch(nlength,idist)
             fac_volume_corr=compute_fac_volume_cor(idist,horizon,delta)
             Lambda=compute_Lambda(df,current_id,neighbor_ids,idist,nlength)
-            pforcex, pforcey = compute_PD_forces(df,current_id,neighbor_ids,idist,nlength,stretch,fac_volume_corr,Lambda)
+            pforcex, pforcey = compute_PD_forces(df,current_id,neighbor_ids,idist,nlength,stretch,fac_volume_corr,Lambda,horizon,a,b,d)
             df.loc[current_id].pforcex = pforcex
             df.loc[current_id].pforcey = pforcey
-            massvecx, massvecy = compute_stable_mass_vector(df,horizon,current_id,neighbor_ids,idist,fac_volume_corr,dt,a,b,safety_factor=5)
+            massvecx, massvecy = compute_stable_mass_vector(df,horizon,current_id,neighbor_ids,idist,fac_volume_corr,dt,a,b,d,safety_factor=5)
             df.loc[current_id].massvecx = massvecx
             df.loc[current_id].massvecy = massvecy
         cn = compute_damping_coeff(df,dt)
