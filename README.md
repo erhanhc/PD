@@ -1,7 +1,7 @@
 # PD Modelling of Composite Laminates for Damage Analysis
 **Currently implementing the theory given in Peridynamic Theory and Its Application by Madenci and Oterkus** 
 
-***Whats been done so far? ***
+***Whats been done so far?***
 1. Ordinary state based PD formulation is studied following the given instructions/codes given in the refence book. 
 2. ADR process is applied but not verified for quasi-static solutions. 
 3. Pandas-HDF5 object and data formats are implemented using Ordinary state based formulation and isotropic material model. 
