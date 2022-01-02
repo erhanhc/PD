@@ -13,4 +13,9 @@
 4. Composite lamina and lamination theory to be studied, formulated and implemented in the code.
 5. Damage prediction chapter to be studied, formulated and implemented in the code. 
 
+***Files in the Repository***
+1. pd_funcs.py: Consists of predefined functions that are used for numerical operations that are necessary for preprocess, solution and outputs. 
+2. benchmark_test1.py. Tension test of a isotropic plate. (Not verified yet)
+3. Docs: Reformulations that are given in the reference book and schemas for the generated codes. 
+
 EHC.
