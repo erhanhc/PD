@@ -9,7 +9,7 @@
 
 ***TO-DO List***
 1. Reformulation of the theory given in the reference book and its references. 
-2. Verification and clear formulation of ADR process. Problems still exist in certain terms. ***-> This requires computation of stiffness terms Kij using small displacement assumption. Volume corr. factor for the current material point is taken as =1. ***
+2. Verification and clear formulation of ADR process. Problems still exist in certain terms. ***-> This requires computation of stiffness terms Kij using small displacement assumption. Volume corr. factor for the current material point is taken as =1.***
 3. Time integration schemes to be implemented in the code. ***-> Forward and Backward differencing scheme for velocity and displacement fields.***
 4. Composite lamina and lamination theory to be studied, formulated and implemented in the code.
 5. Damage prediction chapter to be studied, formulated and implemented in the code. 
