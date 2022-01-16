@@ -273,3 +273,22 @@ def iterate(df,ibcs,dt,max_iter,applied,horizon,delta,a,b,d):
         cn = compute_damping_coeff(df,dt)
         apply_ADR(df,tt,dt,cn)
 
+def time_integration(df,ibcs,dt,total_time,applied,horizon,delta,a,b,d):
+    set_loading_condition(ibcs,df,applied,delta)
+    for tt in range(0,total_time+dt,dt):
+        preprocess_with_SCF(df,horizon,delta,a,b,d)
+        for current_id in df.index:
+            neighbor_ids,idist=get_neighbors(df,current_id,horizon)
+            nlength=compute_nlength(df,current_id,neighbor_ids)
+            stretch=compute_stretch(nlength,idist)
+            fac_volume_corr=compute_fac_volume_cor(idist,horizon,delta)
+            Lambda=compute_Lambda(df,current_id,neighbor_ids,idist,nlength)
+            pforcex, pforcey = compute_PD_forces(df,current_id,neighbor_ids,idist,nlength,stretch,fac_volume_corr,Lambda,horizon,a,b,d)
+            df.loc[current_id].pforcex = pforcex
+            df.loc[current_id].pforcey = pforcey
+            df.loc[current_id].accelx = (df.loc[current_id].pforcex + df.loc[current_id].bforcex) / df.loc[current_id].density
+            df.loc[current_id].accely = (df.loc[current_id].pforcey + df.loc[current_id].bforcey) / df.loc[current_id].density
+            df.loc[current_id].velx = df.loc[current_id].accelx * dt + df.loc[current_id].velx
+            df.loc[current_id].vely = df.loc[current_id].accely * dt + df.loc[current_id].vely
+            df.loc[current_id].dispx = df.loc[current_id].velx * dt + df.loc[current_id].dispx
+            df.loc[current_id].dispy = df.loc[current_id].vely * dt + df.loc[current_id].dispy
