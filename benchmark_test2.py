@@ -14,6 +14,7 @@ ndivy=50
 totalpd = ndivx*ndivy
 #Collocation points with all attributes equal to 0. with datatype float32
 df = pandas.DataFrame(numpy.zeros((totalpd,len(columns)),dtype='float32'),columns=columns)
+dfn = pandas.DataFrame(columns=['neighbors'])
 #Geometry
 dt = 1.
 L=1.
@@ -39,6 +40,6 @@ d = 2 / numpy.pi/thickness/horizon**3
 #Preprocess for SCF's 
 condition_list = ['uniaxial stretch x','uniaxial stretch y','simple shear in x-y']
 disp_grad=0.001
-preprocess(df,condition_list,disp_grad,horizon,delta,a,b,d,mu)
+preprocess(df,dfn,condition_list,disp_grad,horizon,delta,a,b,d,mu)
 #Time Integration Forward-Backward Scheme
-time_integration(df,'uniaxial tensile loading',0.1,1000,E*1e-3,horizon,delta,a,b,d)
+time_integration(df,dfn,'uniaxial tensile loading',0.1,1000,E*1e-3,horizon,delta,a,b,d)

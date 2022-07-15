@@ -8,7 +8,11 @@ Created on Sat Nov  6 11:14:35 2021
 from pd_funcs import preprocess, iterate
 
 import pandas, numpy
-columns = ['coordx','coordy','volume','dispx','dispy','SED','Dilatation','D1','D2','S1','S2','pforcex','pforcey','bforcex','bforcey','massvecx','massvecy','pforceoldx','pforceoldy','velhalfoldx','velhalfoldy','velx','vely','velhalfx','velhalfy']
+columns = ['coordx','coordy','volume','dispx',
+'dispy','SED','Dilatation','D1','D2','S1','S2',
+'pforcex','pforcey','bforcex','bforcey','massvecx','massvecy',
+'pforceoldx','pforceoldy','velhalfoldx','velhalfoldy','velx','vely',
+'velhalfx','velhalfy']
 ndivx=100
 ndivy=50
 totalpd = ndivx*ndivy

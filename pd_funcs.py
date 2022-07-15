@@ -1,11 +1,15 @@
 import pandas, numpy
-def get_neighbors(df,current_id,horizon):
-    distance=((df.coordx-df.loc[current_id].coordx)**2+(df.coordy-df.loc[current_id].coordy)**2)**0.5
-    neighbor_ids = distance[distance<=horizon].index
-    neighbor_ids=neighbor_ids.drop(current_id)
+def get_neighbors(df,dfn,current_id,horizon):
+    try:
+        neighbor_ids = dfn.loc[current_id].values
+    except:
+        distance=((df.coordx-df.loc[current_id].coordx)**2+(df.coordy-df.loc[current_id].coordy)**2)**0.5
+        neighbor_ids = distance[distance<=horizon].index
+        neighbor_ids=neighbor_ids.drop(current_id)
+        dfn=dfn.append(construct_dfn(current_id, neighbor_ids))
     idist = ((df.loc[neighbor_ids].coordx-df.loc[current_id].coordx)**2+(df.loc[neighbor_ids].coordy-df.loc[current_id].coordy)**2)**0.5
     idist.name = 'idist'
-    return neighbor_ids,idist
+    return neighbor_ids,idist,dfn
 
 def compute_nlength(df,current_id,neighbor_ids):
     nlength = (((df.loc[current_id].coordx + df.loc[current_id].dispx)-(df.loc[neighbor_ids].coordx + df.loc[neighbor_ids].dispx))**2+((df.loc[current_id].coordy + df.loc[current_id].dispy)-(df.loc[neighbor_ids].coordy + df.loc[neighbor_ids].dispy))**2)
@@ -49,15 +53,8 @@ def compute_SED(df,current_id,neighbor_ids,nlength,idist,fac_volume_corr,horizon
     SED.name = 'SED'
     return SED
 
-def construct_dfn(idist,nlength,stretch,fac_volume_corr,Lambda,Dilatation,SED):
-    dfn = pandas.DataFrame()
-    dfn[idist.name]=idist
-    dfn[nlength.name]=nlength
-    dfn[fac_volume_corr.name]=fac_volume_corr
-    dfn[Lambda.name]=Lambda
-    dfn[Dilatation.name]=Dilatation
-    dfn[SED.name]=SED
-    return dfn
+def construct_dfn(current_id,neighbor_ids):
+    return pandas.DataFrame(neighbor_ids,index=len(neighbor_ids)*[current_id], columns=['neighbors'])
 
 def set_loading_condition(condition,df,applied,delta):
     if condition == 'uniaxial stretch x':
@@ -146,11 +143,11 @@ def set_surface_correction_factors(df,current_id,condition,disp_grad,SED,mu):
         df.loc[current_id].S2 = 0.5*disp_grad**2*mu / SED.sum()
         df.loc[current_id].SED = SED.sum()*df.loc[current_id].S1
 
-def preprocess(df,condition_list,disp_grad,horizon,delta,a,b,d,mu):
+def preprocess(df,dfn,condition_list,disp_grad,horizon,delta,a,b,d,mu):
     for condition in condition_list:
         set_loading_condition(condition,df,disp_grad,delta)
         for current_id in df.index:
-            neighbor_ids,idist=get_neighbors(df,current_id,horizon)
+            neighbor_ids,idist,dfn=get_neighbors(df,dfn,current_id,horizon)
             nlength=compute_nlength(df,current_id,neighbor_ids)
             stretch=compute_stretch(nlength,idist)
             fac_volume_corr=compute_fac_volume_cor(idist,horizon,delta)
@@ -159,7 +156,6 @@ def preprocess(df,condition_list,disp_grad,horizon,delta,a,b,d,mu):
             df.loc[current_id].Dilatation= Dilatation.sum()
             SED=compute_SED(df,current_id,neighbor_ids,nlength,idist,fac_volume_corr,horizon,b,Dilatation,a)
             df.loc[current_id].SED = a*Dilatation.sum()**2 + SED.sum()
-            dfn=construct_dfn(idist,nlength,stretch,fac_volume_corr,Lambda,Dilatation,SED)
             set_surface_correction_factors(df,current_id,condition,disp_grad,SED,mu)
 
 def surface_correction_vector(df,current_id,neighbor_ids,idist):
@@ -173,9 +169,9 @@ def surface_correction_vector(df,current_id,neighbor_ids,idist):
     Gb=((nx/gbx)**2+(ny/gby)**2)**-0.5
     return Gd,Gb
 
-def preprocess_with_SCF(df,horizon,delta,a,b,d):
+def preprocess_with_SCF(df,dfn,horizon,delta,a,b,d):
     for current_id in df.index:
-        neighbor_ids,idist=get_neighbors(df,current_id,horizon)
+        neighbor_ids,idist,dfn=get_neighbors(df,dfn,current_id,horizon)
         Gd, Gb =surface_correction_vector(df,current_id,neighbor_ids,idist)
         nlength=compute_nlength(df,current_id,neighbor_ids)
         stretch=compute_stretch(nlength,idist)
@@ -187,7 +183,6 @@ def preprocess_with_SCF(df,horizon,delta,a,b,d):
         SED=compute_SED(df,current_id,neighbor_ids,nlength,idist,fac_volume_corr,horizon,b,Dilatation,a)
         SED = SED*Gb
         df.loc[current_id].SED = a*Dilatation.sum()**2 + SED.sum()
-        dfn=construct_dfn(idist,nlength,stretch,fac_volume_corr,Lambda,Dilatation,SED)
 
 def compute_PD_forces(df,current_id,neighbor_ids,idist,nlength,stretch,fac_volume_corr,Lambda,horizon,a,b,d):
     A = 2*horizon*(d*Lambda/idist*(a*df.loc[current_id].Dilatation)+b*(stretch))
@@ -251,7 +246,7 @@ def apply_ADR(df,tt,dt,cn):
         df.loc[current_id].pforceoldx = df.loc[current_id].pforcex
         df.loc[current_id].pforceoldy = df.loc[current_id].pforcey
 	
-def iterate(df,ibcs,dt,max_iter,applied,horizon,delta,a,b,d):
+def iterate(df,dfn,ibcs,dt,max_iter,applied,horizon,delta,a,b,d):
     set_loading_condition(ibcs,df,applied,delta)
     for tt in range(1,max_iter+dt,dt):
         if numpy.mod(tt,50)==0:
@@ -259,7 +254,7 @@ def iterate(df,ibcs,dt,max_iter,applied,horizon,delta,a,b,d):
         preprocess_with_SCF(df,horizon,delta,a,b,d)
         print(tt)
         for current_id in df.index:
-            neighbor_ids,idist=get_neighbors(df,current_id,horizon)
+            neighbor_ids,idist,dfn=get_neighbors(df,dfn,current_id,horizon)
             nlength=compute_nlength(df,current_id,neighbor_ids)
             stretch=compute_stretch(nlength,idist)
             fac_volume_corr=compute_fac_volume_cor(idist,horizon,delta)
@@ -273,12 +268,12 @@ def iterate(df,ibcs,dt,max_iter,applied,horizon,delta,a,b,d):
         cn = compute_damping_coeff(df,dt)
         apply_ADR(df,tt,dt,cn)
 
-def time_integration(df,ibcs,dt,total_time,applied,horizon,delta,a,b,d):
+def time_integration(df,dfn,ibcs,dt,total_time,applied,horizon,delta,a,b,d):
     set_loading_condition(ibcs,df,applied,delta)
     for tt in range(0,total_time+dt,dt):
         preprocess_with_SCF(df,horizon,delta,a,b,d)
         for current_id in df.index:
-            neighbor_ids,idist=get_neighbors(df,current_id,horizon)
+            neighbor_ids,idist,dfn=get_neighbors(df,dfn,current_id,horizon)
             nlength=compute_nlength(df,current_id,neighbor_ids)
             stretch=compute_stretch(nlength,idist)
             fac_volume_corr=compute_fac_volume_cor(idist,horizon,delta)
