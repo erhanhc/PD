@@ -12,7 +12,7 @@ def get_neighbors(df,dfn,current_id,horizon):
     return neighbor_ids,idist,dfn
 
 def compute_nlength(df,current_id,neighbor_ids):
-    nlength = (((df.loc[current_id].coordx + df.loc[current_id].dispx)-(df.loc[neighbor_ids].coordx + df.loc[neighbor_ids].dispx))**2+((df.loc[current_id].coordy + df.loc[current_id].dispy)-(df.loc[neighbor_ids].coordy + df.loc[neighbor_ids].dispy))**2)
+    nlength = (((df.loc[current_id].coordx + df.loc[current_id].dispx)-(df.loc[neighbor_ids].coordx + df.loc[neighbor_ids].dispx))**2+((df.loc[current_id].coordy + df.loc[current_id].dispy)-(df.loc[neighbor_ids].coordy + df.loc[neighbor_ids].dispy))**2)**0.5
     nlength.name = 'nlength'
     return nlength
 	
