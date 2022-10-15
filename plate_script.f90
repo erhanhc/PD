@@ -35,6 +35,7 @@ program main
     parameter(horizon = 3*delta)
     parameter(max_member = total_point*36)
     real *8 coord(total_point,2), disp(total_point,2), bforce(total_point,2)
+    real *8 DSCF(total_point,2), SSCF(total_point,2)
     integer numfam(total_point,1), pointfam(total_point,1), nodefam(max_member,1)
     character(len=60) condition
     character(len=60),dimension(4,1) :: condition_list
@@ -47,9 +48,10 @@ program main
     ! --MATERIAL PROPERTIES--
     E = 200.0
     nu = 1/3
-    kappa = E/3/(1-2*nu)
+    kappa = E/2/(1-nu)
     mu = E/2/(1+nu)
     a = 0.5 * (kappa - 2 * mu)
+    print*, a
     b = 6 * mu / pi / thickness / horizon**4
     d = 2 / pi / thickness / horizon**3 
 
@@ -70,7 +72,7 @@ program main
     enddo
     call set_coord(coord,L,W,ndivx,ndivy,delta,total_point)
     call set_neigbors(coord,numfam,pointfam,nodefam,horizon,total_point,max_member)
-    call preprocess(condition_list, horizon, delta, volume, d, b, idist, nlength, stretch, coord, disp, numfam, pointfam,nodefam,total_point, max_member)
+    call preprocess(condition_list, horizon, delta, volume, d, b, a, idist, nlength, stretch, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,mu)
     
 end program main
 

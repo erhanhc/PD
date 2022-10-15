@@ -184,7 +184,7 @@ subroutine compute_kinematics(idist, nlength,stretch,Lambda, x_k, x_j, u_k, u_j)
     call dot_product(y_j-y_k,y_j-y_k,nlength)
     nlength = dsqrt(nlength)
     call dot_product((y_j-y_k)/nlength,(x_j-x_k)/idist,Lambda)
-    stretch = nlength / idist
+    stretch = (nlength - idist) / idist
     if (echo) then
         print*, 'idist:',idist, 'nlength:',nlength, 'stretch:', stretch, 'Lambda:', Lambda
     endif
@@ -202,39 +202,84 @@ end subroutine compute_Theta_k_j
 subroutine compute_Distort_k_j(Distort_k_j,idist,nlength,volume_j)
     implicit none
     real*8, intent(in) :: idist,nlength,volume_j
-    real-8 Distort_k_j
-    
+    real*8 Distort_k_j
+    Distort_k_j = (nlength-idist)**2 * volume_j /idist
     return
 end subroutine compute_Distort_k_j
 
-subroutine preprocess(condition_list, horizon, delta, volume, d, b, idist, nlength, stretch, coord, disp, numfam, pointfam,nodefam,total_point, max_member)
+subroutine set_surface_correction_factors(current_point,condition,disp_grad,SED,Theta_k,mu,total_point,DSCF,SSCF)
     implicit none
     logical echo
     parameter(echo = .TRUE.)
-    real*8, intent(in) :: horizon, delta, volume, d, b
+    real*8, intent(in) :: disp_grad , SED , Theta_k , mu
+    real*8 DSCF(total_point,2), SSCF(total_point,2)
+    integer, intent(in) :: current_point,total_point
+    character(len=60), intent(in) :: condition
+    real*8 d_1 , d_2 , s_1 , s_2
+    
+    ! -----------UNIAXIAL STRETCH IN X DIRECTION-----------
+    if (condition == 'uniaxial stretch x') then
+        d_1 = disp_grad / Theta_k
+        if (echo) then
+            print*, d_1, 'Theta Correction D1 - xdir'
+        endif
+        DSCF(current_point,1)=d_1
+    !-------------------------------------------------------
+    ! -----------UNIAXIAL STRETCH IN Y DIRECTION-----------
+    else if (condition =='uniaxial stretch y') then
+        d_2 = disp_grad / Theta_k
+        if (echo) then
+            print*, d_2, 'Theta Correction D2 - ydir'
+        endif
+        DSCF(current_point,2)=d_2
+    !-------------------------------------------------------
+
+    ! -----------SIMPLE SHEAR STRECTH CASE-----------
+    else if (condition == 'simple shear in x-y') then
+        s_1 = 0.5*disp_grad**2*mu / SED
+        s_2 = 0.5*disp_grad**2*mu / SED
+        if (echo) then
+            print*, s_1, 'Strain Energy Correction  S1 - xdir'
+            print*, s_2, 'Strain Energy Correction  S2 - ydir'
+        endif
+        SSCF(current_point,1) = s_1
+        SSCF(current_point,2) = s_2
+    endif
+    !-------------------------------------------------------
+    return
+end subroutine set_surface_correction_factors
+
+
+subroutine preprocess(condition_list, horizon, delta, volume, d, b, a, idist, nlength, stretch, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,mu)
+    implicit none
+    logical echo
+    parameter(echo = .TRUE.)
+    real*8, intent(in) :: horizon, delta, volume, d, b, a,mu
     integer i
     real*8 idist, nlength, stretch, fac_vol, applied
-    real*8 coord(total_point,2), disp(total_point,2), bforce(total_point,1)
+    real*8 coord(total_point,2), disp(total_point,2), bforce(total_point,1), DSCF(total_point,2), SSCF(total_point,2)
     integer numfam(total_point,1), pointfam(total_point,1), nodefam(max_member,1)
     integer current_point, other_point,  total_point, max_member
     character(len=60) condition
     character(len=60),dimension(4,1) , intent(in) :: condition_list
-    real*8 Lambda, Theta_k, Theta_k_j, Distort_k_j, Distort_k
+
+    real*8 Lambda, Theta_k, Theta_k_j, Distort_k_j, Distort_k, SED_k
     do i = 1, 3
         condition = condition_list(i,1)
         applied = 0.001
         call set_conditions(condition, coord, disp, bforce, applied, delta, total_point)
         do current_point = 1, total_point
+            Distort_k = 0.
+            Theta_k = 0.
+            SED_k = 0.
             do other_point = 1, numfam(current_point,1)
                 idist = 0.
                 nlength = 0.
                 stretch = 0.
                 Lambda = 0.
                 Theta_k_j = 0.
-                Theta_k = 0.
                 Distort_k_j = 0.
-                Distort_k = 0.
-                call compute_kinematics(idist, nlength, stretch, Lambda, coord(current_point,:), coord(nodefam(pointfam(current_point,1)+other_point-1,1),:) , disp(current_point,2), disp(nodefam(pointfam(current_point,1)+other_point-1,1),2))
+                call compute_kinematics(idist, nlength, stretch, Lambda, coord(current_point,:), coord(nodefam(pointfam(current_point,1)+other_point-1,1),:) , disp(current_point,:), disp(nodefam(pointfam(current_point,1)+other_point-1,1),:))
                 call compute_fac_volume_corr(fac_vol, idist, horizon, delta)
                 call compute_Theta_k_j(Theta_k_j, stretch, Lambda, volume*fac_vol)
                 Theta_k = Theta_k + d * horizon * Theta_k_j
@@ -244,9 +289,14 @@ subroutine preprocess(condition_list, horizon, delta, volume, d, b, idist, nleng
                     print*, 'x_k:', coord(current_point,:), 'y_k:', coord(current_point,:)+disp(current_point,:)
                     print*, 'x_j:', coord(nodefam(pointfam(current_point,1)+other_point-1,1),:), 'y_j:', coord(nodefam(pointfam(current_point,1)+other_point-1,1),:)+disp(nodefam(pointfam(current_point,1)+other_point-1,1),:)                
                     print*, 'Theta_k_j:', Theta_k_j, 'Theta_k:', Theta_k
+                    print*, 'Distort_k_j:', Distort_k_j, 'Distort_k:',Distort_k
                 endif
-            
             enddo
+            SED_k = a * Theta_k **2 + Distort_k
+            call set_surface_correction_factors(current_point,condition,applied,SED_k,Theta_k,mu,total_point,DSCF,SSCF)
+            if (echo) then
+                print*, 'SED:', SED_k
+            endif
         enddo
     enddo
     return
