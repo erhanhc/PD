@@ -24,7 +24,7 @@
 include 'pd_routines.f90'
 program main
     implicit none
-    integer ndivx, ndivy, total_point,max_member,i
+    integer ndivx, ndivy, total_point,max_member,i,max_iter,tt
     real *8 L, W, delta, horizon, thickness, volume
     parameter(ndivx = 100)
     parameter(ndivy = 50)
@@ -34,14 +34,16 @@ program main
     parameter(delta = L/ndivx)
     parameter(horizon = 3*delta)
     parameter(max_member = total_point*36)
-    real *8 coord(total_point,2), disp(total_point,2), bforce(total_point,2)
-    real *8 DSCF(total_point,2), SSCF(total_point,2)
+    parameter(max_iter = 1000)
+    real *8 coord(total_point,2), disp(total_point,2), bforce(total_point,2),pforce(total_point,2)
+    real *8 DSCF(total_point,2), SSCF(total_point,2), Theta(total_point,1)
     integer numfam(total_point,1), pointfam(total_point,1), nodefam(max_member,1)
     character(len=60) condition
     character(len=60),dimension(4,1) :: condition_list
     real *8 applied
     real *8 E, nu, kappa, mu , a, b, d, pi
     real *8 idist, nlength, stretch
+    applied = 100.0d0
     thickness = delta
     volume = delta*delta*thickness
     pi = dacos(-1.0d0)
@@ -74,5 +76,20 @@ program main
     call set_neigbors(coord,numfam,pointfam,nodefam,horizon,total_point,max_member)
     call preprocess(condition_list, horizon, delta, volume, d, b, a, idist, nlength, stretch, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,mu)
     
+    do i = 1, total_point
+        disp(total_point,1) = 0.0
+        disp(total_point,2) = 0.0
+        bforce(total_point,1) = 0.0
+        bforce(total_point,2) = 0.0
+        pforce(total_point,1) = 0.0
+        pforce(total_point,2) = 0.0
+    enddo   
+    call set_conditions(condition_list(4,1), coord, disp, bforce, applied, delta, total_point)
+    do tt = 1, max_iter
+        call preprocess_with_SCF(horizon, delta, volume, d, b, a, idist, nlength, stretch, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,mu,Theta)
+        print*, 'Iteration: ',tt
+        call iterate(horizon, delta, volume, d, b, a, idist, nlength, stretch, coord, disp, numfam, pointfam,nodefam,total_point, max_member, DSCF, SSCF, Theta, pforce)
+
+    enddo
 end program main
 

@@ -73,7 +73,7 @@ subroutine set_conditions(condition, coord, disp, bforce, applied, delta, total_
     ! This subroutine sets specific boundary conditions for surface correction factor calculations.
     ! Uniaxial tensile loading is added for the benchmarking.
     logical echo
-    parameter(echo = .FALSE.)
+    parameter(echo = .TRUE.)
     integer, intent(in) :: total_point
     integer current_point
     character(len=60), intent(in) :: condition
@@ -173,7 +173,7 @@ end subroutine dot_product
 subroutine compute_kinematics(idist, nlength,stretch,Lambda, x_k, x_j, u_k, u_j) 
     implicit none
     logical echo
-    parameter(echo = .TRUE.)
+    parameter(echo = .FALSE.)
     real*8, intent(in) ::  x_k(1,2), x_j(1,2), u_k(1,2), u_j(1,2)
     real*8  nlength, idist, stretch, Lambda
     real*8 y_k(1,2), y_j(1,2)
@@ -210,7 +210,7 @@ end subroutine compute_Distort_k_j
 subroutine set_surface_correction_factors(current_point,condition,disp_grad,SED,Theta_k,mu,total_point,DSCF,SSCF)
     implicit none
     logical echo
-    parameter(echo = .TRUE.)
+    parameter(echo = .FALSE.)
     real*8, intent(in) :: disp_grad , SED , Theta_k , mu
     real*8 DSCF(total_point,2), SSCF(total_point,2)
     integer, intent(in) :: current_point,total_point
@@ -253,7 +253,7 @@ end subroutine set_surface_correction_factors
 subroutine preprocess(condition_list, horizon, delta, volume, d, b, a, idist, nlength, stretch, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,mu)
     implicit none
     logical echo
-    parameter(echo = .TRUE.)
+    parameter(echo = .FALSE.)
     real*8, intent(in) :: horizon, delta, volume, d, b, a,mu
     integer i
     real*8 idist, nlength, stretch, fac_vol, applied
@@ -301,3 +301,126 @@ subroutine preprocess(condition_list, horizon, delta, volume, d, b, a, idist, nl
     enddo
     return
 end subroutine preprocess
+
+subroutine surface_correction_vector(current_DSCF,current_SSCF,current_coord,other_DSCF,other_SSCF,other_coord,idist,Gb,Gd)
+    implicit none
+    !from page. 74
+    logical echo
+    parameter(echo = .FALSE.)
+    real*8, intent(in) :: idist
+    real*8, intent(in) :: current_DSCF(1,2),current_SSCF(1,2),current_coord(1,2),other_DSCF(1,2),other_SSCF(1,2),other_coord(1,2)
+    real*8 gdx, gdy, gbx, gby, nx, ny
+    real*8 Gd, Gb
+    gdx = (current_DSCF(1,1) + other_DSCF(1,1)) * 0.5
+    gdy = (current_DSCF(1,2) + other_DSCF(1,2)) * 0.5
+    gbx = (current_SSCF(1,1) + other_SSCF(1,1)) * 0.5
+    gby = (current_SSCF(1,2) + other_SSCF(1,2)) * 0.5
+    nx = (other_coord(1,1) - current_coord(1,1)) / idist
+    ny = (other_coord(1,2) - current_coord(1,2)) / idist
+    Gd = ( ( nx / gdx )**2 + ( ny / gdy )**2 )** (-0.5)
+    Gb = ( ( nx / gbx )**2 + ( ny / gby )**2 )** (-0.5)
+    if (echo) then
+        print*, 'Current Node:',current_coord
+        print*, 'Neighbor Node:',other_coord
+        print*, 'Initial Distance:',idist
+        print*, 'Current Node DSCF:',current_DSCF
+        print*, 'Current Node SSCF:',current_SSCF
+        print*, 'Neighbor Node DSCF:',other_DSCF
+        print*, 'Neighbor Node SSCF:',other_SSCF
+        print*, 'Normal Vector:',nx,ny
+        print*, 'Gd:', Gd
+        print*, 'Gb:', Gb
+    endif
+end subroutine surface_correction_vector
+
+subroutine compute_PD_forces(horizon, volume, d, b, a, fac_vol, idist, nlength, stretch, Gd, Gb, Lambda, Theta_current, Theta_other, coord_current, coord_other, disp_current, disp_other, pforce)
+    implicit none
+    logical echo
+    parameter(echo = .FALSE.)
+    real*8, intent(in) :: horizon, volume, d, b, a, fac_vol, idist, nlength, Gd, Gb, Lambda, stretch
+    real*8, intent(in) :: Theta_current(1,1), Theta_other(1,1), coord_current(1,2), coord_other(1,2), disp_current(1,2), disp_other(1,2)
+    real*8 pforce(1,2)
+    real*8 AA, BB, delyx, delyy, tkjx, tkjy, tjkx, tjky
+    AA = 2 * horizon * (d * Gd * Lambda / idist * (a * Theta_current(1,1)) + b * Gb * stretch )
+    BB = 2 * horizon * (d * Gd * Lambda / idist * (a * Theta_other(1,1)) + b * Gb * stretch )
+    delyx = ( (disp_other(1,1)+coord_other(1,1)) - ( disp_current(1,1)+coord_current(1,1) ) ) 
+    delyy = ( (disp_other(1,2)+coord_other(1,2)) - ( disp_current(1,2)+coord_current(1,2) ) ) 
+    tkjx = delyx * 0.5 * A  / nlength
+    tkjy = delyy * 0.5 * A  / nlength
+    tjkx = -delyx * 0.5 * B  / nlength
+    tjky = -delyy * 0.5 * B  / nlength
+    pforce(1,1) = pforce(1,1) + (tkjx - tjkx) * volume * fac_vol
+    pforce(1,2) = pforce(1,2) + (tkjy - tjky) * volume * fac_vol
+end subroutine compute_PD_forces
+
+subroutine iterate(horizon, delta, volume, d, b, a, idist, nlength, stretch, coord, disp, numfam, pointfam,nodefam,total_point, max_member, DSCF, SSCF, Theta, pforce)
+implicit none
+logical echo
+parameter(echo = .TRUE.)
+real*8, intent(in) :: horizon, delta, volume, d, b, a
+integer i
+real*8 idist, nlength, stretch, fac_vol, applied
+real*8 coord(total_point,2), disp(total_point,2), bforce(total_point,1), DSCF(total_point,2), SSCF(total_point,2), Theta(total_point,1), pforce(total_point,2)
+integer numfam(total_point,1), pointfam(total_point,1), nodefam(max_member,1)
+integer current_point, other_point, total_point, max_member
+real*8 Lambda
+real*8 Gd, Gb
+!page 142
+    do current_point = 1, total_point
+        do other_point = 1, numfam(current_point,1)
+            idist = 0.
+            nlength = 0.
+            stretch = 0.
+            Lambda = 0.
+            Gd = 0.
+            Gb = 0.
+            call compute_kinematics(idist, nlength, stretch, Lambda, coord(current_point,:), coord(nodefam(pointfam(current_point,1)+other_point-1,1),:) , disp(current_point,:), disp(nodefam(pointfam(current_point,1)+other_point-1,1),:))
+            call compute_fac_volume_corr(fac_vol, idist, horizon, delta)
+            call surface_correction_vector(DSCF(current_point,:),SSCF(current_point,:),coord(current_point,:),DSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),SSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),coord(nodefam(pointfam(current_point,1)+other_point-1,1),:),idist,Gb,Gd)
+            call compute_PD_forces(horizon, volume, d, b, a, fac_vol, idist, nlength, stretch, Gd, Gb, Lambda, Theta(current_point,:), Theta(nodefam(pointfam(current_point,1)+other_point-1,1),:), coord(current_point,:), coord(nodefam(pointfam(current_point,1)+other_point-1,1),:), disp(current_point,:), disp(nodefam(pointfam(current_point,1)+other_point-1,1),:), pforce(current_point,:))
+            
+        enddo
+    if (echo) then
+        print*, 'PD Force on ',current_point,' in x-dir:',pforce(current_point,1)
+        print*, 'PD Force on ',current_point,' in y-dir:',pforce(current_point,2)
+    endif
+    enddo
+end subroutine iterate
+
+subroutine preprocess_with_SCF(horizon, delta, volume, d, b, a, idist, nlength, stretch, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,mu,Theta)
+    implicit none
+    logical echo
+    parameter(echo = .FALSE.)
+    real*8, intent(in) :: horizon, delta, volume, d, b, a,mu
+    integer i
+    real*8 idist, nlength, stretch, fac_vol, applied
+    real*8 coord(total_point,2), disp(total_point,2), bforce(total_point,1), DSCF(total_point,2), SSCF(total_point,2), Theta(total_point,1)
+    integer numfam(total_point,1), pointfam(total_point,1), nodefam(max_member,1)
+    integer current_point, other_point, total_point, max_member
+    real*8 Lambda, Theta_k, Theta_k_j, Distort_k_j, Distort_k, SED_k
+    real*8 Gd, Gb
+    do current_point = 1, total_point
+        Distort_k = 0.
+        Theta_k = 0.
+        SED_k = 0.
+        do other_point = 1, numfam(current_point,1)
+            idist = 0.
+            nlength = 0.
+            stretch = 0.
+            Lambda = 0.
+            Theta_k_j = 0.
+            Distort_k_j = 0.
+            Gd = 0.
+            Gb = 0.
+            call compute_kinematics(idist, nlength, stretch, Lambda, coord(current_point,:), coord(nodefam(pointfam(current_point,1)+other_point-1,1),:) , disp(current_point,:), disp(nodefam(pointfam(current_point,1)+other_point-1,1),:))
+            call compute_fac_volume_corr(fac_vol, idist, horizon, delta)
+            call surface_correction_vector(DSCF(current_point,:),SSCF(current_point,:),coord(current_point,:),DSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),SSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),coord(nodefam(pointfam(current_point,1)+other_point-1,1),:),idist,Gb,Gd)
+            call compute_Theta_k_j(Theta_k_j, stretch, Lambda, volume*fac_vol)
+            Theta_k = Theta_k + d * horizon * Gd * Theta_k_j
+            call compute_Distort_k_j(Distort_k_j,idist,nlength,volume*fac_vol)
+            Distort_k = Distort_k + b * horizon * Gb * Distort_k_j
+        enddo 
+        SED_k = a * Theta_k **2 + Distort_k
+        Theta(current_point,1) = Theta_k
+    enddo
+end subroutine preprocess_with_SCF
