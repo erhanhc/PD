@@ -35,7 +35,7 @@ program main
     parameter(horizon = 3*delta)
     parameter(max_member = total_point*36)
     parameter(max_iter = 1000)
-    real *8 coord(total_point,2), disp(total_point,2), bforce(total_point,2),pforce(total_point,2)
+    real *8 coord(total_point,2), disp(total_point,2), bforce(total_point,2),pforce(total_point,2), pforceold(total_point,2), vel(total_point,2), velhalf(total_point,2), velhalfold(total_point,2)
     real *8 DSCF(total_point,2), SSCF(total_point,2), Theta(total_point,1)
     integer numfam(total_point,1), pointfam(total_point,1), nodefam(max_member,1)
     character(len=60) condition
@@ -47,16 +47,23 @@ program main
     thickness = delta
     volume = delta*delta*thickness
     pi = dacos(-1.0d0)
+    
     ! --MATERIAL PROPERTIES--
     E = 200.0
-    nu = 1/3
+    nu = 1.0/3
+    print*, (9*E/delta)
     kappa = E/2/(1-nu)
     mu = E/2/(1+nu)
     a = 0.5 * (kappa - 2 * mu)
-    print*, a
     b = 6 * mu / pi / thickness / horizon**4
     d = 2 / pi / thickness / horizon**3 
-
+    print*,E
+    print*,nu
+    print*,kappa
+    print*,mu
+    print*, a
+    print*,b
+    print*,d
     do i = 1, total_point
         pointfam(i,1)=0
         numfam(i,1)=0
@@ -74,22 +81,26 @@ program main
     enddo
     call set_coord(coord,L,W,ndivx,ndivy,delta,total_point)
     call set_neigbors(coord,numfam,pointfam,nodefam,horizon,total_point,max_member)
-    call preprocess(condition_list, horizon, delta, volume, d, b, a, idist, nlength, stretch, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,mu)
+    call preprocess(condition_list, horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,mu)
     
     do i = 1, total_point
-        disp(total_point,1) = 0.0
-        disp(total_point,2) = 0.0
-        bforce(total_point,1) = 0.0
-        bforce(total_point,2) = 0.0
-        pforce(total_point,1) = 0.0
-        pforce(total_point,2) = 0.0
+        disp(i,1) = 0.0
+        disp(i,2) = 0.0
+        bforce(i,1) = 0.0
+        bforce(i,2) = 0.0
+        pforce(i,1) = 0.0
+        pforce(i,2) = 0.0
+        vel(i,1) = 0.0
+        vel(i,2) = 0.0
+        velhalf(i,1) = 0.0
+        velhalf(i,2) = 0.0
+        velhalfold(i,1) = 0.0
+        velhalfold(i,2) = 0.0
+        pforceold(i,1) = 0.0
+        pforceold(i,2) = 0.0
     enddo   
     call set_conditions(condition_list(4,1), coord, disp, bforce, applied, delta, total_point)
-    do tt = 1, max_iter
-        call preprocess_with_SCF(horizon, delta, volume, d, b, a, idist, nlength, stretch, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,mu,Theta)
-        print*, 'Iteration: ',tt
-        call iterate(horizon, delta, volume, d, b, a, idist, nlength, stretch, coord, disp, numfam, pointfam,nodefam,total_point, max_member, DSCF, SSCF, Theta, pforce)
-
-    enddo
+    ! call preprocess_with_SCF(horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,Theta)
+    call iterate(max_iter,horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member, DSCF, SSCF, Theta, pforce, bforce, pforceold, vel, velhalf, velhalfold)
 end program main
 
