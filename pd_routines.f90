@@ -18,7 +18,7 @@ subroutine set_coord(coord,L,W,ndivx,ndivy,delta,total_point)
     do i = 1, ndivx
         do j = 1, ndivy
             coord(current_point,1) = -0.5 * L + ( delta / 2.0) + (i-1) * delta
-            coord(current_point,2) = -0.5 * W + ( delta / 2.0) + (i-j) * delta
+            coord(current_point,2) = -0.5 * W + ( delta / 2.0) + (j-1) * delta
             if (echo) then
                 print*, 'ID ',current_point,' x= ',coord(current_point,1), ' y= ',coord(current_point,2)
             endif
@@ -68,7 +68,7 @@ subroutine set_neigbors(coord,numfam,pointfam,nodefam,horizon,total_point,max_me
     return
 end
 
-subroutine set_conditions(condition, coord, disp, bforce, applied, delta, total_point)
+subroutine set_conditions(condition, coord, disp, bforce, applied, delta, total_point,vel,pforce,horizon)
     implicit none
     ! This subroutine sets specific boundary conditions for surface correction factor calculations.
     ! Uniaxial tensile loading is added for the benchmarking.
@@ -77,8 +77,8 @@ subroutine set_conditions(condition, coord, disp, bforce, applied, delta, total_
     integer, intent(in) :: total_point
     integer current_point
     character(len=60), intent(in) :: condition
-    real *8 ,intent(in) :: coord(total_point,2), applied, delta
-    real *8 , intent(inout) :: bforce(total_point,2), disp(total_point,2)
+    real *8 ,intent(in) :: coord(total_point,2), applied, delta, horizon
+    real *8 , intent(inout) :: bforce(total_point,2), pforce(total_point,2), disp(total_point,2),vel(total_point,2)
     real *8 left_bound, right_bound, disp_grad
     do current_point=1, total_point
 
@@ -132,6 +132,30 @@ subroutine set_conditions(condition, coord, disp, bforce, applied, delta, total_
             if (echo) then
                 print*, current_point, 'applied x force', bforce(current_point,1)
                 print*, current_point, 'applied y force', bforce(current_point,2)
+            endif
+        !-------------------------------------------------------
+        else if (condition == 'displacement uniaxial tensile') then
+            disp(current_point,1) = 0.0d0
+            disp(current_point,2) = 0.0d0
+            pforce(current_point,1) = 0.0d0
+            pforce(current_point,2) = 0.0d0
+            bforce(current_point,1) = 0.0d0
+            bforce(current_point,2) = 0.0d0
+            left_bound = minval(coord(:,1))
+            right_bound = maxval(coord(:,1))
+            if (coord(current_point,1).gt.(right_bound-horizon)) then
+                vel(current_point,1)=1.0d-7
+                vel(current_point,2)=0.0d0
+            else if (coord(current_point,1).lt.(left_bound+horizon)) then
+                vel(current_point,1)=-1.0d-7
+                vel(current_point,2)=0.0d0
+            else 
+                vel(current_point,1)=0.0d0
+                vel(current_point,2)=0.0d0
+            endif
+            if (echo) then
+                print*, current_point, 'applied x velocity', vel(current_point,1)
+                print*, current_point, 'applied y velocity', vel(current_point,2)
             endif
         endif
         !-------------------------------------------------------
@@ -249,14 +273,14 @@ subroutine set_surface_correction_factors(current_point,condition,disp_grad,SED,
 end subroutine set_surface_correction_factors
 
 
-subroutine preprocess(condition_list, horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,mu)
+subroutine preprocess(condition_list, horizon, delta, volume, d, b, a, coord, disp, vel, pforce, bforce, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,mu)
     implicit none
     logical echo
     parameter(echo = .FALSE.)
     real*8, intent(in) :: horizon, delta, volume, d, b, a,mu
     integer i
     real*8 idist, nlength, stretch, fac_vol, applied
-    real*8 coord(total_point,2), disp(total_point,2), bforce(total_point,2), DSCF(total_point,2), SSCF(total_point,2)
+    real*8 coord(total_point,2), disp(total_point,2), DSCF(total_point,2), SSCF(total_point,2), vel(total_point,2), bforce(total_point,2),pforce(total_point,2)
     integer numfam(total_point,1), pointfam(total_point,1), nodefam(max_member,1)
     integer current_point, other_point, total_point, max_member
     character(len=60) condition
@@ -266,7 +290,7 @@ subroutine preprocess(condition_list, horizon, delta, volume, d, b, a, coord, di
     do i = 1, 3
         condition = condition_list(i,1)
         applied = 0.001
-        call set_conditions(condition, coord, disp, bforce, applied, delta, total_point)
+        call set_conditions(condition, coord, disp, bforce, applied, delta, total_point,vel,pforce,horizon)
         do current_point = 1, total_point
             Distort_k = 0.
             Theta_k = 0.
@@ -351,6 +375,74 @@ subroutine compute_PD_forces(horizon, volume, d, b, a, fac_vol, idist, nlength, 
     pforce(1,1) = pforce(1,1) + (tkjx - tjkx) * volume * fac_vol
     pforce(1,2) = pforce(1,2) + (tkjy - tjky) * volume * fac_vol
 end subroutine compute_PD_forces
+
+subroutine time_integration(horizon, delta, volume, d, b, a, dens, coord, disp, vel, accel, pforce, bforce, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,Theta,end_time,dt)
+    implicit none
+    logical echo
+    parameter(echo = .FALSE.)
+    real*8, intent(in) :: horizon, delta, volume, d, b, a, dens
+    integer i
+    real*8 idist, nlength, stretch, fac_vol, applied
+    real*8 coord(total_point,2), disp(total_point,2), vel(total_point,2), accel(total_point,2), pforce(total_point,2), bforce(total_point,2), DSCF(total_point,2), SSCF(total_point,2), Theta(total_point,1)
+    integer numfam(total_point,1), pointfam(total_point,1), nodefam(max_member,1)
+    integer current_point, other_point, total_point, max_member
+    real*8 Lambda, Theta_k, Theta_k_j, Distort_k_j, Distort_k, SED_k
+    real*8 Gd, Gb
+    integer tt, end_time
+    real*8 dt 
+    character(len=60) filename,file_id
+    real*8 left_bound, right_bound
+    filename = 'output_'
+    file_id=''
+    left_bound = minval(coord(:,1))
+    right_bound = maxval(coord(:,1))
+    do tt = 0, end_time
+        write(file_id,'(i6)') tt
+        filename = 'output.csv.' // trim(adjustl(file_id))
+        open(file = trim(filename),unit=35)
+        write(35,222) 'ID, coordx, coordy, coordz,dispx, dispy, velx, vely, accelx, accely, pforcex, pforcey'
+        call preprocess_with_SCF(horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,Theta)
+        do current_point = 1, total_point
+            do other_point = 1, numfam(current_point,1)
+            idist = 0.
+            nlength = 0.
+            stretch = 0.
+            Lambda = 0.
+            Gd = 0.
+            Gb = 0.
+            call compute_kinematics(idist, nlength, stretch, Lambda, coord(current_point,:), coord(nodefam(pointfam(current_point,1)+other_point-1,1),:) , disp(current_point,:), disp(nodefam(pointfam(current_point,1)+other_point-1,1),:))
+            call compute_fac_volume_corr(fac_vol, idist, horizon, delta)
+            call surface_correction_vector(DSCF(current_point,:),SSCF(current_point,:),coord(current_point,:),DSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),SSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),coord(nodefam(pointfam(current_point,1)+other_point-1,1),:),idist,Gb,Gd)
+            call compute_PD_forces(horizon, volume, d, b, a, fac_vol, idist, nlength, stretch, Gd, Gb, Lambda, Theta(current_point,:), Theta(nodefam(pointfam(current_point,1)+other_point-1,1),:), coord(current_point,:), coord(nodefam(pointfam(current_point,1)+other_point-1,1),:), disp(current_point,:), disp(nodefam(pointfam(current_point,1)+other_point-1,1),:), pforce(current_point,:))
+            accel(current_point,1) = ( pforce(current_point,1) + bforce(current_point,1) ) / dens
+            accel(current_point,2) = ( pforce(current_point,2) + bforce(current_point,2) ) / dens
+            if (coord(current_point,1).lt.(left_bound+horizon)) then
+                vel(current_point,1) = -1.0d-7
+                vel(current_point,2) = 0.0d0
+            else if (coord(current_point,1).gt.(right_bound-horizon)) then
+                vel(current_point,1) = 1.0d-7
+                vel(current_point,2) = 0.0d0
+            else 
+                vel(current_point,1) = vel(current_point,1) + accel(current_point,1)*dt
+                vel(current_point,2) = vel(current_point,2) + accel(current_point,2)*dt
+            endif
+            disp(current_point,1) = disp(current_point,1) + vel(current_point,1) * dt
+            disp(current_point,2) = disp(current_point,2) + vel(current_point,2) * dt
+            if (current_point.eq.2500) then
+                if (echo) then
+                    print*, 'Displacement x:', disp(2500,1)
+                    print*, 'Displacement y:', disp(2500,2)
+                endif
+            endif
+            enddo
+            write(35,333) current_point,',', coord(current_point,1),',', coord(current_point,2),',',0.0d0,',', disp(current_point,1),',', disp(current_point,2),',', vel(current_point,1),',', vel(current_point,2), ',',accel(current_point,1),',', accel(current_point,2), ',', pforce(current_point,1), ',' ,pforce(current_point,2)
+        enddo
+        close(35)
+    enddo
+222 format(a)
+333 format(i0,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5)
+! 333 format(i10,3x,e12.5,3x,e12.5,3x,e12.5,3x,e12.5,3x,e12.5,3x,e12.5,3x,e12.5,3x,e12.5)
+end subroutine time_integration
 
 subroutine iterate(max_iter,horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member, DSCF, SSCF, Theta, pforce, bforce, pforceold, vel, velhalf, velhalfold)
     implicit none
@@ -564,3 +656,4 @@ subroutine preprocess_with_SCF(horizon, delta, volume, d, b, a, coord, disp, num
         Theta(current_point,1) = Theta_k
     enddo
 end subroutine preprocess_with_SCF
+

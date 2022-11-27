@@ -35,19 +35,19 @@ program main
     parameter(horizon = 3*delta)
     parameter(max_member = total_point*36)
     parameter(max_iter = 1000)
-    real *8 coord(total_point,2), disp(total_point,2), bforce(total_point,2),pforce(total_point,2), pforceold(total_point,2), vel(total_point,2), velhalf(total_point,2), velhalfold(total_point,2)
+    real *8 coord(total_point,2), disp(total_point,2), bforce(total_point,2),pforce(total_point,2), pforceold(total_point,2), vel(total_point,2), velhalf(total_point,2), velhalfold(total_point,2), accel(total_point,2)
     real *8 DSCF(total_point,2), SSCF(total_point,2), Theta(total_point,1)
     integer numfam(total_point,1), pointfam(total_point,1), nodefam(max_member,1)
     character(len=60) condition
-    character(len=60),dimension(4,1) :: condition_list
+    character(len=60),dimension(5,1) :: condition_list
     real *8 applied
     real *8 E, nu, kappa, mu , a, b, d, pi
-    real *8 idist, nlength, stretch
+    real *8 idist, nlength, stretch, dens
     applied = 100.0d0
     thickness = delta
     volume = delta*delta*thickness
     pi = dacos(-1.0d0)
-    
+    dens = 7850.0d0
     ! --MATERIAL PROPERTIES--
     E = 200.0
     nu = 1.0/3
@@ -75,13 +75,14 @@ program main
     condition_list(2,1) = 'uniaxial stretch y'
     condition_list(3,1) = 'simple shear in x-y'
     condition_list(4,1) = "uniaxial tensile loading"
+    condition_list(5,1) = 'displacement uniaxial tensile'
 
     do i = 1, max_member
         nodefam(i,1)=0
     enddo
     call set_coord(coord,L,W,ndivx,ndivy,delta,total_point)
     call set_neigbors(coord,numfam,pointfam,nodefam,horizon,total_point,max_member)
-    call preprocess(condition_list, horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,mu)
+    call preprocess(condition_list, horizon, delta, volume, d, b, a, coord, disp, vel, pforce, bforce, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,mu)
     
     do i = 1, total_point
         disp(i,1) = 0.0
@@ -98,9 +99,12 @@ program main
         velhalfold(i,2) = 0.0
         pforceold(i,1) = 0.0
         pforceold(i,2) = 0.0
-    enddo   
-    call set_conditions(condition_list(4,1), coord, disp, bforce, applied, delta, total_point)
+        accel(i,1) = 0.0
+        accel(i,1) = 0.0
+    enddo
+    call set_conditions(condition, coord, disp, bforce, applied, delta, total_point,vel,pforce, horizon)
     ! call preprocess_with_SCF(horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,Theta)
-    call iterate(max_iter,horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member, DSCF, SSCF, Theta, pforce, bforce, pforceold, vel, velhalf, velhalfold)
+    ! call iterate(max_iter,horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member, DSCF, SSCF, Theta, pforce, bforce, pforceold, vel, velhalf, velhalfold)
+    call time_integration(horizon, delta, volume, d, b, a, dens, coord, disp, vel, accel, pforce, bforce, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,Theta,100000,1.0d-5)
 end program main
 
