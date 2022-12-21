@@ -120,10 +120,10 @@ subroutine set_conditions(condition, coord, disp, bforce, applied, delta, total_
             left_bound = minval(coord(:,1))
             right_bound = maxval(coord(:,1))
             if (coord(current_point,1) == right_bound) then
-                bforce(current_point,1) = -1.0d0 * applied / delta
+                bforce(current_point,1) = 1.0d0 * applied / delta
                 bforce(current_point,2) = 0.0d0
             else if (coord(current_point,1) == left_bound) then
-                bforce(current_point,1) = 1.0d0 * applied / delta
+                bforce(current_point,1) = -1.0d0 * applied / delta
                 bforce(current_point,2) = 0.0d0
             else 
                 bforce(current_point,1) = 0.0d0
@@ -139,19 +139,19 @@ subroutine set_conditions(condition, coord, disp, bforce, applied, delta, total_
             disp(current_point,2) = 0.0d0
             pforce(current_point,1) = 0.0d0
             pforce(current_point,2) = 0.0d0
-            bforce(current_point,1) = 0.0d0
-            bforce(current_point,2) = 0.0d0
+            vel(current_point,1)=0.0d0
+            vel(current_point,2)=0.0d0
             left_bound = minval(coord(:,1))
             right_bound = maxval(coord(:,1))
             if (coord(current_point,1).gt.(right_bound-horizon)) then
-                vel(current_point,1)=1.0d-7
-                vel(current_point,2)=0.0d0
+                bforce(current_point,1)=0.0d0
+                bforce(current_point,2)=0.0d0
             else if (coord(current_point,1).lt.(left_bound+horizon)) then
-                vel(current_point,1)=-1.0d-7
-                vel(current_point,2)=0.0d0
+                bforce(current_point,1)=0.0d0
+                bforce(current_point,2)=0.0d0
             else 
-                vel(current_point,1)=0.0d0
-                vel(current_point,2)=0.0d0
+                bforce(current_point,1) = 0.0d0
+                bforce(current_point,2) = 0.0d0
             endif
             if (echo) then
                 print*, current_point, 'applied x velocity', vel(current_point,1)
@@ -279,7 +279,7 @@ subroutine preprocess(condition_list, horizon, delta, volume, d, b, a, coord, di
     parameter(echo = .FALSE.)
     real*8, intent(in) :: horizon, delta, volume, d, b, a,mu
     integer i
-    real*8 idist, nlength, stretch, fac_vol, applied
+    real*8 idist, nlength, stretch, fac_vol
     real*8 coord(total_point,2), disp(total_point,2), DSCF(total_point,2), SSCF(total_point,2), vel(total_point,2), bforce(total_point,2),pforce(total_point,2)
     integer numfam(total_point,1), pointfam(total_point,1), nodefam(max_member,1)
     integer current_point, other_point, total_point, max_member
@@ -289,8 +289,7 @@ subroutine preprocess(condition_list, horizon, delta, volume, d, b, a, coord, di
     real*8 Lambda, Theta_k, Theta_k_j, Distort_k_j, Distort_k, SED_k
     do i = 1, 3
         condition = condition_list(i,1)
-        applied = 0.001
-        call set_conditions(condition, coord, disp, bforce, applied, delta, total_point,vel,pforce,horizon)
+        call set_conditions(condition, coord, disp, bforce, 0.001d0, delta, total_point,vel,pforce,horizon)
         do current_point = 1, total_point
             Distort_k = 0.
             Theta_k = 0.
@@ -316,7 +315,7 @@ subroutine preprocess(condition_list, horizon, delta, volume, d, b, a, coord, di
                 endif
             enddo
             SED_k = a * Theta_k **2 + Distort_k
-            call set_surface_correction_factors(current_point,condition,applied,SED_k,Theta_k,mu,total_point,DSCF,SSCF)
+            call set_surface_correction_factors(current_point,condition,0.001d0,SED_k,Theta_k,mu,total_point,DSCF,SSCF)
             if (echo) then
                 print*, 'SED:', SED_k
             endif
@@ -334,14 +333,14 @@ subroutine surface_correction_vector(current_DSCF,current_SSCF,current_coord,oth
     real*8, intent(in) :: current_DSCF(1,2),current_SSCF(1,2),current_coord(1,2),other_DSCF(1,2),other_SSCF(1,2),other_coord(1,2)
     real*8 gdx, gdy, gbx, gby, nx, ny
     real*8 Gd, Gb
-    gdx = (current_DSCF(1,1) + other_DSCF(1,1)) * 0.5
-    gdy = (current_DSCF(1,2) + other_DSCF(1,2)) * 0.5
-    gbx = (current_SSCF(1,1) + other_SSCF(1,1)) * 0.5
-    gby = (current_SSCF(1,2) + other_SSCF(1,2)) * 0.5
+    gdx = (current_DSCF(1,1) + other_DSCF(1,1)) * 0.5d0
+    gdy = (current_DSCF(1,2) + other_DSCF(1,2)) * 0.5d0
+    gbx = (current_SSCF(1,1) + other_SSCF(1,1)) * 0.5d0
+    gby = (current_SSCF(1,2) + other_SSCF(1,2)) * 0.5d0
     nx = (other_coord(1,1) - current_coord(1,1)) / idist
     ny = (other_coord(1,2) - current_coord(1,2)) / idist
-    Gd = ( ( nx / gdx )**2 + ( ny / gdy )**2 )** (-0.5)
-    Gb = ( ( nx / gbx )**2 + ( ny / gby )**2 )** (-0.5)
+    Gd = ( ( nx / gdx )**2 + ( ny / gdy )**2 )** (-0.5d0)
+    Gb = ( ( nx / gbx )**2 + ( ny / gby )**2 )** (-0.5d0)
     if (echo) then
         print*, 'Current Node:',current_coord
         print*, 'Neighbor Node:',other_coord
@@ -364,16 +363,15 @@ subroutine compute_PD_forces(horizon, volume, d, b, a, fac_vol, idist, nlength, 
     real*8, intent(in) :: Theta_current(1,1), Theta_other(1,1), coord_current(1,2), coord_other(1,2), disp_current(1,2), disp_other(1,2)
     real*8 pforce(1,2)
     real*8 AA, BB, delyx, delyy, tkjx, tkjy, tjkx, tjky
-    AA = 2 * horizon * (d * Gd * Lambda / idist * (a * Theta_current(1,1)) + b * Gb * stretch )
-    BB = 2 * horizon * (d * Gd * Lambda / idist * (a * Theta_other(1,1)) + b * Gb * stretch )
-    delyx = ( (disp_other(1,1)+coord_other(1,1)) - ( disp_current(1,1)+coord_current(1,1) ) ) 
-    delyy = ( (disp_other(1,2)+coord_other(1,2)) - ( disp_current(1,2)+coord_current(1,2) ) ) 
-    tkjx = delyx * 0.5 * A  / nlength
-    tkjy = delyy * 0.5 * A  / nlength
-    tjkx = -delyx * 0.5 * B  / nlength
-    tjky = -delyy * 0.5 * B  / nlength
-    pforce(1,1) = pforce(1,1) + (tkjx - tjkx) * volume * fac_vol
-    pforce(1,2) = pforce(1,2) + (tkjy - tjky) * volume * fac_vol
+    real*8 tkj(1,2), tjk(1,2),  y_j_k(1,2)
+    real*8 mag_y_j_k
+    mag_y_j_k= 0.0d0
+    y_j_k(1,:) = ( (disp_other(1,:) + coord_other(1,:)) - ( disp_current(1,:) + coord_current(1,:) ) ) 
+    call dot_product(y_j_k(1,:),y_j_k(1,:),mag_y_j_k)
+    mag_y_j_k = sqrt(mag_y_j_k)
+    tkj(1,:) =  ( y_j_k(1,:) / mag_y_j_k ) * ( 2 * a * d * Gd *  horizon * Lambda / idist * Theta_current(1,1) + 2 * b * Gb * horizon * stretch )
+    tjk(1,:) = -( y_j_k(1,:) / mag_y_j_k ) * ( 2 * a * d * Gd *  horizon * Lambda / idist * Theta_other(1,1)   + 2 * b * Gb * horizon * stretch ) 
+    pforce(1,:) = pforce(1,:) + ( tkj(1,:) - tjk(1,:) ) * volume * fac_vol
 end subroutine compute_PD_forces
 
 subroutine time_integration(horizon, delta, volume, d, b, a, dens, coord, disp, vel, accel, pforce, bforce, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,Theta,end_time,dt)
@@ -400,48 +398,64 @@ subroutine time_integration(horizon, delta, volume, d, b, a, dens, coord, disp, 
         write(file_id,'(i6)') tt
         filename = 'output.csv.' // trim(adjustl(file_id))
         open(file = trim(filename),unit=35)
-        write(35,222) 'ID, coordx, coordy, coordz,dispx, dispy, velx, vely, accelx, accely, pforcex, pforcey'
+        write(35,222) 'ID, coordx, coordy, coordz,dispx, dispy, velx, vely, accelx, accely, pforcex, pforcey, bforcex, bforcey'
         call preprocess_with_SCF(horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,Theta)
         do current_point = 1, total_point
             do other_point = 1, numfam(current_point,1)
-            idist = 0.
-            nlength = 0.
-            stretch = 0.
-            Lambda = 0.
-            Gd = 0.
-            Gb = 0.
+            idist = 0.0d0
+            nlength = 0.0d0
+            stretch = 0.0d0
+            Lambda = 0.0d0
+            Gd = 0.0d0
+            Gb = 0.0d0
             call compute_kinematics(idist, nlength, stretch, Lambda, coord(current_point,:), coord(nodefam(pointfam(current_point,1)+other_point-1,1),:) , disp(current_point,:), disp(nodefam(pointfam(current_point,1)+other_point-1,1),:))
             call compute_fac_volume_corr(fac_vol, idist, horizon, delta)
             call surface_correction_vector(DSCF(current_point,:),SSCF(current_point,:),coord(current_point,:),DSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),SSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),coord(nodefam(pointfam(current_point,1)+other_point-1,1),:),idist,Gb,Gd)
             call compute_PD_forces(horizon, volume, d, b, a, fac_vol, idist, nlength, stretch, Gd, Gb, Lambda, Theta(current_point,:), Theta(nodefam(pointfam(current_point,1)+other_point-1,1),:), coord(current_point,:), coord(nodefam(pointfam(current_point,1)+other_point-1,1),:), disp(current_point,:), disp(nodefam(pointfam(current_point,1)+other_point-1,1),:), pforce(current_point,:))
-            accel(current_point,1) = ( pforce(current_point,1) + bforce(current_point,1) ) / dens
-            accel(current_point,2) = ( pforce(current_point,2) + bforce(current_point,2) ) / dens
-            if (coord(current_point,1).lt.(left_bound+horizon)) then
-                vel(current_point,1) = -1.0d-7
-                vel(current_point,2) = 0.0d0
-            else if (coord(current_point,1).gt.(right_bound-horizon)) then
-                vel(current_point,1) = 1.0d-7
-                vel(current_point,2) = 0.0d0
-            else 
-                vel(current_point,1) = vel(current_point,1) + accel(current_point,1)*dt
-                vel(current_point,2) = vel(current_point,2) + accel(current_point,2)*dt
+            end do
+        end do
+        do current_point = 1, total_point
+            
+            if (tt.lt.500000) then
+                if (coord(current_point,1).lt.(left_bound+2*horizon)) then
+                    bforce(current_point,1) = -1.5d5*tt/(end_time/2)
+                    bforce(current_point,2) = 0.0d0
+                    pforce(current_point,1) = 0.0d0
+                    pforce(current_point,2) = 0.0d0
+                else if (coord(current_point,1).gt.(right_bound-2*horizon)) then
+                    bforce(current_point,1) = 1.5d5*tt/(end_time/2)
+                    bforce(current_point,2) = 0.0d0
+                    pforce(current_point,1) = 0.0d0
+                    pforce(current_point,2) = 0.0d0
+                endif 
+            else
+                if (coord(current_point,1).lt.(left_bound+2*horizon)) then
+                    bforce(current_point,1) = -1.5d5
+                    bforce(current_point,2) = 0.0d0
+                    pforce(current_point,1) = 0.0d0
+                    pforce(current_point,2) = 0.0d0
+                else if (coord(current_point,1).gt.(right_bound-2*horizon)) then
+                    bforce(current_point,1) = 1.5d5
+                    bforce(current_point,2) = 0.0d0
+                    pforce(current_point,1) = 0.0d0
+                    pforce(current_point,2) = 0.0d0
+                endif
             endif
-            disp(current_point,1) = disp(current_point,1) + vel(current_point,1) * dt
-            disp(current_point,2) = disp(current_point,2) + vel(current_point,2) * dt
+            accel(current_point,:) = ( pforce(current_point,:) + bforce(current_point,:) ) / dens
+            vel(current_point,:)  = vel(current_point,:)  + accel(current_point,:) * dt
+            disp(current_point,:) = disp(current_point,:) + vel(current_point,:)   * dt
             if (current_point.eq.2500) then
                 if (echo) then
                     print*, 'Displacement x:', disp(2500,1)
                     print*, 'Displacement y:', disp(2500,2)
                 endif
             endif
-            enddo
-            write(35,333) current_point,',', coord(current_point,1),',', coord(current_point,2),',',0.0d0,',', disp(current_point,1),',', disp(current_point,2),',', vel(current_point,1),',', vel(current_point,2), ',',accel(current_point,1),',', accel(current_point,2), ',', pforce(current_point,1), ',' ,pforce(current_point,2)
+            write(35,333) current_point,',', coord(current_point,1),',', coord(current_point,2),',',0.0d0,',', disp(current_point,1),',', disp(current_point,2),',', vel(current_point,1),',', vel(current_point,2), ',',accel(current_point,1),',', accel(current_point,2), ',', pforce(current_point,1), ',' ,pforce(current_point,2), ',', bforce(current_point,1), ',' ,bforce(current_point,2)
         enddo
         close(35)
     enddo
 222 format(a)
-333 format(i0,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5)
-! 333 format(i10,3x,e12.5,3x,e12.5,3x,e12.5,3x,e12.5,3x,e12.5,3x,e12.5,3x,e12.5,3x,e12.5)
+333 format(i0,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5)
 end subroutine time_integration
 
 subroutine iterate(max_iter,horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member, DSCF, SSCF, Theta, pforce, bforce, pforceold, vel, velhalf, velhalfold)
@@ -455,7 +469,7 @@ subroutine iterate(max_iter,horizon, delta, volume, d, b, a, coord, disp, numfam
     integer ,intent(in) :: numfam(total_point,1), pointfam(total_point,1), nodefam(max_member,1)
     integer current_point, other_point, tt
     real*8 Lambda
-    real*8 Gd, Gb, Kijx, Kijy
+    real*8 Gd, Gb, Kijx,Kijy
     real*8 massvec(total_point,2)
     real*8 vel(total_point,2), velhalf(total_point,2), velhalfold(total_point,2), pforceold(total_point,2)
     !page 142
@@ -479,7 +493,7 @@ subroutine iterate(max_iter,horizon, delta, volume, d, b, a, coord, disp, numfam
                 call compute_fac_volume_corr(fac_vol, idist, horizon, delta)
                 call surface_correction_vector(DSCF(current_point,:),SSCF(current_point,:),coord(current_point,:),DSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),SSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),coord(nodefam(pointfam(current_point,1)+other_point-1,1),:),idist,Gb,Gd)
                 call compute_PD_forces(horizon, volume, d, b, a, fac_vol, idist, nlength, stretch, Gd, Gb, Lambda, Theta(current_point,:), Theta(nodefam(pointfam(current_point,1)+other_point-1,1),:), coord(current_point,:), coord(nodefam(pointfam(current_point,1)+other_point-1,1),:), disp(current_point,:), disp(nodefam(pointfam(current_point,1)+other_point-1,1),:), pforce(current_point,:))
-                call compute_ADR_Kij(coord(current_point,:),coord(nodefam(pointfam(current_point,1)+other_point-1,1),:), horizon, idist, a, b, d, Gb, Gd, fac_vol * volume, fac_vol * volume, Kijx, Kijy)
+                call compute_ADR_Kij(coord(current_point,:),coord(nodefam(pointfam(current_point,1)+other_point-1,1),:), horizon, idist, a, b, d, Gb, Gd, fac_vol * volume, fac_vol * volume, Kijx,Kijy)
                 massvec(current_point,1) = massvec(current_point,1) +  0.25 * 5 * Kijx
                 massvec(current_point,2) = massvec(current_point,2) + 0.25 * 5 * Kijy
                 if (echo) then
@@ -491,21 +505,28 @@ subroutine iterate(max_iter,horizon, delta, volume, d, b, a, coord, disp, numfam
             print*, 'PD Force on ',current_point,' in y-dir:',pforce(current_point,2)
         endif
         enddo
-        call ADR(tt, total_point, disp, vel, velhalf, velhalfold, pforce, bforce, pforceold, massvec)
+        call ADR(tt, total_point, coord, disp, vel, velhalf, velhalfold, pforce, bforce, pforceold, massvec )
         print*, 'ux: ',disp(2500,1), ' uy: ', disp(2500,2)
     enddo
 end subroutine iterate
 
-subroutine ADR(tt, total_point, disp, vel, velhalf, velhalfold, pforce, bforce, pforceold, massvec )
+subroutine ADR(tt, total_point, coord, disp, vel, velhalf, velhalfold, pforce, bforce, pforceold, massvec )
     implicit none
     logical echo
     parameter(echo = .FALSE.)
     integer, intent(in) :: tt, total_point
     integer current_point
-    real*8 disp(total_point,2), vel(total_point,2), velhalf(total_point,2), velhalfold(total_point,2)
+    real*8 disp(total_point,2), coord(total_point,2), vel(total_point,2), velhalf(total_point,2), velhalfold(total_point,2)
     real*8 pforce(total_point,2), bforce(total_point,2), pforceold(total_point,2), massvec(total_point,2)
     real*8 cn_num, cn_denom, cn
-    if (tt.eq.1) then 
+    character(len=60) filename,file_id
+    filename = 'output_'
+    file_id=''
+    write(file_id,'(i6)') tt
+    filename = 'output.csv.' // trim(adjustl(file_id))
+    open(file = trim(filename),unit=35)
+    write(35,222) 'ID, coordx, coordy, coordz,dispx, dispy, velx, vely, velhalfoldx, velhalfoldy, pforcex, pforcey, bforcex, bforcey'
+    if (tt.eq.1) then
         do current_point = 1, total_point
             !starting ADR process with tt=1, page 137
             vel(current_point,1) = 0.
@@ -518,6 +539,7 @@ subroutine ADR(tt, total_point, disp, vel, velhalf, velhalfold, pforce, bforce, 
             pforceold(current_point,2) = pforce(current_point,2)
             disp(current_point,1) =  disp(current_point,1) + velhalf(current_point,1) 
             disp(current_point,2) =  disp(current_point,2) + velhalf(current_point,2) 
+            write(35,333) current_point,',', coord(current_point,1),',', coord(current_point,2),',',0.0d0,',', disp(current_point,1),',', disp(current_point,2),',', vel(current_point,1),',', vel(current_point,2), ',',velhalf(current_point,1),',', velhalf(current_point,2), ',', pforce(current_point,1), ',' ,pforce(current_point,2), ',', bforce(current_point,1), ',' ,bforce(current_point,2)
             if (echo) then
                 print*, total_point
                 print*, 'displacement for ',current_point,' :', disp(current_point,:)
@@ -563,8 +585,11 @@ subroutine ADR(tt, total_point, disp, vel, velhalf, velhalfold, pforce, bforce, 
             velhalfold(current_point,2) = velhalf(current_point,2)
             pforceold(current_point,1) = pforce(current_point,1)
             pforceold(current_point,2) = pforce(current_point,2)
+            write(35,333) current_point,',', coord(current_point,1),',', coord(current_point,2),',',0.0d0,',', disp(current_point,1),',', disp(current_point,2),',', vel(current_point,1),',', vel(current_point,2), ',',velhalf(current_point,1),',', velhalf(current_point,2), ',', pforce(current_point,1), ',' ,pforce(current_point,2), ',', bforce(current_point,1), ',' ,bforce(current_point,2)
         enddo
     endif
+    222 format(a)
+    333 format(i0,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5)
 end subroutine ADR
 
 subroutine compute_ADR_cn(velhalfold, disp, pforce, pforceold, massvec, cn_num, cn_denom )
@@ -582,37 +607,37 @@ subroutine compute_ADR_cn(velhalfold, disp, pforce, pforceold, massvec, cn_num, 
         print*, 'Velocity Vector n-1/2 : ',velhalfold(1,:)
         print*, '---------------------'
     endif
-    if (velhalfold(1,1).ne.0.0) then
-        cn_num = cn_num + ( disp(1,1) * ( -1.0 * ( pforce(1,1) / massvec(1,1) - pforceold(1,1) / massvec(1,1) ) / velhalfold(1,1) ) * disp(1,1) )
-    else
+    if (velhalfold(1,1).ne.0.0d0) then
+        cn_num = cn_num + ( disp(1,1) * ( -1.0d0 * ( pforce(1,1) / massvec(1,1) - pforceold(1,1) / massvec(1,1) ) / velhalfold(1,1) ) * disp(1,1) )
+    else if (echo) then
         print*, 'velhalfold(1,1) = 0'
     endif
-    if (velhalfold(1,2).ne.0.0) then
-        cn_num = cn_num + ( disp(1,2) * ( -1.0 * ( pforce(1,2) / massvec(1,2) - pforceold(1,2) / massvec(1,2) ) / velhalfold(1,2) ) * disp(1,2) )
-    else 
+    if (velhalfold(1,2).ne.0.0d0) then
+        cn_num = cn_num + ( disp(1,2) * ( -1.0d0 * ( pforce(1,2) / massvec(1,2) - pforceold(1,2) / massvec(1,2) ) / velhalfold(1,2) ) * disp(1,2) )
+    else if (echo) then
         print*, 'velhalfold(1,2) = 0'
     endif
     cn_denom = cn_denom + disp(1,1) * disp(1,1) + disp(1,2) * disp(1,2)
 end subroutine compute_ADR_cn
 
-subroutine compute_ADR_Kij(coord_current,coord_other, horizon, idist, a, b, d, Gb, Gd, volume_current, volume_other, Kijx, Kijy)
+subroutine compute_ADR_Kij(coord_current,coord_other, horizon, idist, a, b, d, Gb, Gd, volume_current, volume_other, Kijx,Kijy)
     ! page 138
     implicit none
     logical echo
     parameter(echo=.FALSE.)
     real*8, intent(in) :: horizon, idist, a, b, d, volume_current, volume_other, Gb, Gd
-    real*8 Kijx, Kijy
+    real*8 Kijx,Kijy
     real *8 coord_current(1,2),coord_other(1,2) 
-    real*8 x_proj, y_proj
-    real*8 ex(1,2), ey(1,2)
+    real*8 x_proj,y_proj
+    real*8 ex(1,2),ey(1,2)
     ex(1,1) = 1.0
     ex(1,2) = 0.0
     ey(1,1) = 0.0
-    ey(1,2) = 1.0
+    ey(1,2) = 1.0    
     call dot_product((coord_other(1,:) - coord_current(1,:)),ex,x_proj)
     call dot_product((coord_other(1,:) - coord_current(1,:)),ey,y_proj)
-    Kijx = abs(x_proj) * 4 * horizon / idist / idist * ( 0.5 * a * (Gd * d)**2 * horizon / abs(idist) * ( volume_current + volume_other) + Gb * b )
-    Kijy = abs(y_proj) * 4 * horizon / idist / idist * ( 0.5 * a * (Gd * d)**2 * horizon / abs(idist) * ( volume_current + volume_other) + Gb * b )
+    Kijx = abs(x_proj) * 4 * horizon / idist / idist * ( 0.5 * a * (Gd * d)**2 * horizon / idist * ( volume_current + volume_other) + Gb * b )
+    Kijy = abs(y_proj) * 4 * horizon / idist / idist * ( 0.5 * a * (Gd * d)**2 * horizon / idist * ( volume_current + volume_other) + Gb * b )
     if (echo) then
         print*, 'Kijx = ',Kijx
         print*, 'Kijy = ',Kijy
@@ -632,18 +657,18 @@ subroutine preprocess_with_SCF(horizon, delta, volume, d, b, a, coord, disp, num
     real*8 Lambda, Theta_k, Theta_k_j, Distort_k_j, Distort_k, SED_k
     real*8 Gd, Gb
     do current_point = 1, total_point
-        Distort_k = 0.
-        Theta_k = 0.
-        SED_k = 0.
+        Distort_k = 0.0d0
+        Theta_k = 0.0d0
+        SED_k = 0.0d0
         do other_point = 1, numfam(current_point,1)
-            idist = 0.
-            nlength = 0.
-            stretch = 0.
-            Lambda = 0.
-            Theta_k_j = 0.
-            Distort_k_j = 0.
-            Gd = 0.
-            Gb = 0.
+            idist = 0.0d0
+            nlength = 0.0d0
+            stretch = 0.0d0
+            Lambda = 0.0d0
+            Theta_k_j = 0.0d0
+            Distort_k_j = 0.0d0
+            Gd = 0.0d0
+            Gb = 0.0d0
             call compute_kinematics(idist, nlength, stretch, Lambda, coord(current_point,:), coord(nodefam(pointfam(current_point,1)+other_point-1,1),:) , disp(current_point,:), disp(nodefam(pointfam(current_point,1)+other_point-1,1),:))
             call compute_fac_volume_corr(fac_vol, idist, horizon, delta)
             call surface_correction_vector(DSCF(current_point,:),SSCF(current_point,:),coord(current_point,:),DSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),SSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),coord(nodefam(pointfam(current_point,1)+other_point-1,1),:),idist,Gb,Gd)

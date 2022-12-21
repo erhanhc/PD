@@ -29,11 +29,11 @@ program main
     parameter(ndivx = 100)
     parameter(ndivy = 50)
     parameter(total_point = ndivx * ndivy)
-    parameter(L = 1.0)
-    parameter(W = 0.5)
+    parameter(L = 0.25d0)
+    parameter(W = 0.125d0)
     parameter(delta = L/ndivx)
-    parameter(horizon = 3*delta)
-    parameter(max_member = total_point*36)
+    parameter(horizon = 3.015d0*delta)
+    parameter(max_member = total_point*50)
     parameter(max_iter = 1000)
     real *8 coord(total_point,2), disp(total_point,2), bforce(total_point,2),pforce(total_point,2), pforceold(total_point,2), vel(total_point,2), velhalf(total_point,2), velhalfold(total_point,2), accel(total_point,2)
     real *8 DSCF(total_point,2), SSCF(total_point,2), Theta(total_point,1)
@@ -43,27 +43,27 @@ program main
     real *8 applied
     real *8 E, nu, kappa, mu , a, b, d, pi
     real *8 idist, nlength, stretch, dens
-    applied = 100.0d0
-    thickness = delta
+    applied = 1.5d5
+    thickness = 0.005d0
     volume = delta*delta*thickness
     pi = dacos(-1.0d0)
-    dens = 7850.0d0
+    dens = 7850.0d1
     ! --MATERIAL PROPERTIES--
-    E = 200.0
-    nu = 1.0/3
-    print*, (9*E/delta)
-    kappa = E/2/(1-nu)
-    mu = E/2/(1+nu)
-    a = 0.5 * (kappa - 2 * mu)
-    b = 6 * mu / pi / thickness / horizon**4
-    d = 2 / pi / thickness / horizon**3 
-    print*,E
-    print*,nu
-    print*,kappa
-    print*,mu
-    print*, a
-    print*,b
-    print*,d
+    E = 200.0d9
+    nu = 1.0d0/3.0d0
+    kappa = E/2.0d0/(1.0d0-nu)
+    mu = E/2.0d0/(1.0d0+nu)
+    a = 0.5d0 * (kappa - 2.0d0 * mu)
+    b = 6.0d0 * mu / pi / thickness / horizon**4
+    d = 2.0d0 / pi / thickness / horizon**3 
+    print*, 'Mass Density ',dens, '[kg/m3]'
+    print*,'Youngs Modulus',E,' [Pa]'
+    print*,'Poisson Ratio ',nu
+    print*,'Bulk Modulus ',kappa, '[Pa]'
+    print*,'Shear Modulus ',mu, '[Pa]'
+    print*, 'Parameter a ', a, '[Pa]'
+    print*,'Parameter b ',b, '[N/m7]'
+    print*,'Parameter d ',d, '[1/m4]'
     do i = 1, total_point
         pointfam(i,1)=0
         numfam(i,1)=0
@@ -102,9 +102,11 @@ program main
         accel(i,1) = 0.0
         accel(i,1) = 0.0
     enddo
+    condition = 'displacement uniaxial tensile'
+    applied = 1.5d5
     call set_conditions(condition, coord, disp, bforce, applied, delta, total_point,vel,pforce, horizon)
     ! call preprocess_with_SCF(horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,Theta)
     ! call iterate(max_iter,horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member, DSCF, SSCF, Theta, pforce, bforce, pforceold, vel, velhalf, velhalfold)
-    call time_integration(horizon, delta, volume, d, b, a, dens, coord, disp, vel, accel, pforce, bforce, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,Theta,100000,1.0d-5)
+    call time_integration(horizon, delta, volume, d, b, a, dens, coord, disp, vel, accel, pforce, bforce, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,Theta,100000000,1.0d-6)
 end program main
 
