@@ -39,7 +39,7 @@ subroutine set_neigbors(coord,numfam,pointfam,nodefam,horizon,total_point,max_me
     !pointfam       :   array that relates host material point id to starting index in nodefam (neighborhood list)
     !numfam         :   array that relates host material point id to its neighbor count
     logical echo
-    parameter(echo = .FALSE.)
+    parameter(echo = .TRUE.)
     integer current_point, other_point 
     integer, intent(in) :: max_member, total_point
     integer,intent(inout) :: numfam(total_point,1), pointfam(total_point,1), nodefam(max_member,1)
@@ -59,7 +59,11 @@ subroutine set_neigbors(coord,numfam,pointfam,nodefam,horizon,total_point,max_me
                     numfam(current_point,1) = numfam(current_point,1) + 1
                     nodefam(pointfam(current_point,1)+numfam(current_point,1)-1,1) = other_point
                     if (echo) then
-                        print*, current_point, other_point, distance, numfam(current_point,1)
+                        if (current_point.eq.375) then
+                            if (echo) then
+                                print*, current_point, other_point, distance, numfam(current_point,1)
+                            endif
+                        endif
                     endif
                 endif
             endif
@@ -172,7 +176,8 @@ subroutine compute_fac_volume_corr(fac_vol, idist, horizon, delta)
     real *8 fac_vol
     if (idist < horizon - delta / 2) then
         fac_vol = 1.
-    else if (idist <= horizon) then
+    else if (idist <= horizon + delta / 2) then
+    ! idist < = horizon + delta / 2 -> delta / 2 is added to make sure every neighhbor has a volume correction larger than 0. 
         fac_vol = (horizon + delta / 2 - idist) / delta
     else
         fac_vol = 0.
@@ -200,13 +205,13 @@ subroutine compute_kinematics(idist, nlength,stretch,Lambda, x_k, x_j, u_k, u_j)
     real*8, intent(in) ::  x_k(1,2), x_j(1,2), u_k(1,2), u_j(1,2)
     real*8  nlength, idist, stretch, Lambda
     real*8 y_k(1,2), y_j(1,2)
-    y_k = x_k + u_k
-    y_j = x_j + u_j
-    call dot_product(x_j-x_k,x_j-x_k,idist)
-    idist = dsqrt(idist)
-    call dot_product(y_j-y_k,y_j-y_k,nlength)
-    nlength = dsqrt(nlength)
-    call dot_product((y_j-y_k)/nlength,(x_j-x_k)/idist,Lambda)
+    y_k(1,:) = x_k(1,:) + u_k(1,:)
+    y_j(1,:) = x_j(1,:) + u_j(1,:)
+    call dot_product(x_j(1,:)-x_k(1,:),x_j(1,:)-x_k(1,:),idist)
+    idist = sqrt(idist)
+    call dot_product(y_j(1,:)-y_k(1,:),y_j(1,:)-y_k(1,:),nlength)
+    nlength = sqrt(nlength)
+    call dot_product((y_j(1,:)-y_k(1,:))/nlength,(x_j(1,:)-x_k(1,:))/idist,Lambda)
     stretch = (nlength - idist) / idist
     if (echo) then
         print*, 'idist:',idist, 'nlength:',nlength, 'stretch:', stretch, 'Lambda:', Lambda
@@ -412,42 +417,46 @@ subroutine time_integration(horizon, delta, volume, d, b, a, dens, coord, disp, 
             call compute_fac_volume_corr(fac_vol, idist, horizon, delta)
             call surface_correction_vector(DSCF(current_point,:),SSCF(current_point,:),coord(current_point,:),DSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),SSCF(nodefam(pointfam(current_point,1)+other_point-1,1),:),coord(nodefam(pointfam(current_point,1)+other_point-1,1),:),idist,Gb,Gd)
             call compute_PD_forces(horizon, volume, d, b, a, fac_vol, idist, nlength, stretch, Gd, Gb, Lambda, Theta(current_point,:), Theta(nodefam(pointfam(current_point,1)+other_point-1,1),:), coord(current_point,:), coord(nodefam(pointfam(current_point,1)+other_point-1,1),:), disp(current_point,:), disp(nodefam(pointfam(current_point,1)+other_point-1,1),:), pforce(current_point,:))
+            if (current_point.eq.351) then
+                if (echo) then
+                    print*, 'PFORCE:', pforce(351,:)
+                endif
+            endif
             end do
         end do
         do current_point = 1, total_point
             
-            if (tt.lt.500000) then
+            if (tt.lt.end_time/2) then
                 if (coord(current_point,1).lt.(left_bound+2*horizon)) then
-                    bforce(current_point,1) = -1.5d5*tt/(end_time/2)
+                    bforce(current_point,1) = -0.343d8*tt*dt/(end_time/2)
                     bforce(current_point,2) = 0.0d0
-                    pforce(current_point,1) = 0.0d0
-                    pforce(current_point,2) = 0.0d0
+                    
+                    
                 else if (coord(current_point,1).gt.(right_bound-2*horizon)) then
-                    bforce(current_point,1) = 1.5d5*tt/(end_time/2)
+                    bforce(current_point,1) = 0.343d8*tt*dt/(end_time/2)
                     bforce(current_point,2) = 0.0d0
-                    pforce(current_point,1) = 0.0d0
-                    pforce(current_point,2) = 0.0d0
+                    
+                    
                 endif 
             else
                 if (coord(current_point,1).lt.(left_bound+2*horizon)) then
-                    bforce(current_point,1) = -1.5d5
+                    bforce(current_point,1) = -0.343d8
                     bforce(current_point,2) = 0.0d0
-                    pforce(current_point,1) = 0.0d0
-                    pforce(current_point,2) = 0.0d0
+                    
+                    
                 else if (coord(current_point,1).gt.(right_bound-2*horizon)) then
-                    bforce(current_point,1) = 1.5d5
+                    bforce(current_point,1) = 0.343d8
                     bforce(current_point,2) = 0.0d0
-                    pforce(current_point,1) = 0.0d0
-                    pforce(current_point,2) = 0.0d0
+                    
+                    
                 endif
             endif
             accel(current_point,:) = ( pforce(current_point,:) + bforce(current_point,:) ) / dens
             vel(current_point,:)  = vel(current_point,:)  + accel(current_point,:) * dt
             disp(current_point,:) = disp(current_point,:) + vel(current_point,:)   * dt
-            if (current_point.eq.2500) then
+            if (current_point.eq.351) then
                 if (echo) then
-                    print*, 'Displacement x:', disp(2500,1)
-                    print*, 'Displacement y:', disp(2500,2)
+                    print*, 'PFORCE:', pforce(351,:)
                 endif
             endif
             write(35,333) current_point,',', coord(current_point,1),',', coord(current_point,2),',',0.0d0,',', disp(current_point,1),',', disp(current_point,2),',', vel(current_point,1),',', vel(current_point,2), ',',accel(current_point,1),',', accel(current_point,2), ',', pforce(current_point,1), ',' ,pforce(current_point,2), ',', bforce(current_point,1), ',' ,bforce(current_point,2)
@@ -455,7 +464,7 @@ subroutine time_integration(horizon, delta, volume, d, b, a, dens, coord, disp, 
         close(35)
     enddo
 222 format(a)
-333 format(i0,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5,a,e12.5)
+333 format(i0,a,e18.7,a,e18.7,a,e18.7,a,e18.7,a,e18.7,a,e18.7,a,e18.7,a,e18.7,a,e18.7,a,e18.7,a,e18.7,a,e18.7,a,e18.7)
 end subroutine time_integration
 
 subroutine iterate(max_iter,horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member, DSCF, SSCF, Theta, pforce, bforce, pforceold, vel, velhalf, velhalfold)

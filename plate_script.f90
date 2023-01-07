@@ -26,11 +26,11 @@ program main
     implicit none
     integer ndivx, ndivy, total_point,max_member,i,max_iter,tt
     real *8 L, W, delta, horizon, thickness, volume
-    parameter(ndivx = 100)
-    parameter(ndivy = 50)
+    parameter(ndivx = 300)
+    parameter(ndivy = 150)
     parameter(total_point = ndivx * ndivy)
-    parameter(L = 0.25d0)
-    parameter(W = 0.125d0)
+    parameter(L = 250.0d0)
+    parameter(W = 125.0d0)
     parameter(delta = L/ndivx)
     parameter(horizon = 3.015d0*delta)
     parameter(max_member = total_point*50)
@@ -44,10 +44,10 @@ program main
     real *8 E, nu, kappa, mu , a, b, d, pi
     real *8 idist, nlength, stretch, dens
     applied = 1.5d5
-    thickness = 0.005d0
+    thickness = 5.0d0
     volume = delta*delta*thickness
     pi = dacos(-1.0d0)
-    dens = 7850.0d1
+    dens = 7850.0d-6
     ! --MATERIAL PROPERTIES--
     E = 200.0d9
     nu = 1.0d0/3.0d0
@@ -56,14 +56,14 @@ program main
     a = 0.5d0 * (kappa - 2.0d0 * mu)
     b = 6.0d0 * mu / pi / thickness / horizon**4
     d = 2.0d0 / pi / thickness / horizon**3 
-    print*, 'Mass Density ',dens, '[kg/m3]'
-    print*,'Youngs Modulus',E,' [Pa]'
+    print*, 'Mass Density ',dens, '[g/mm3]'
+    print*,'Youngs Modulus',E,' [microNewton/mm2]'
     print*,'Poisson Ratio ',nu
-    print*,'Bulk Modulus ',kappa, '[Pa]'
-    print*,'Shear Modulus ',mu, '[Pa]'
-    print*, 'Parameter a ', a, '[Pa]'
-    print*,'Parameter b ',b, '[N/m7]'
-    print*,'Parameter d ',d, '[1/m4]'
+    print*,'Bulk Modulus ',kappa, '[microNewton/mm2]'
+    print*,'Shear Modulus ',mu, '[microNewton/mm2]'
+    print*, 'Parameter a ', a, '[microNewton/mm2]'
+    print*,'Parameter b ',b, '[microNewton/mm7]'
+    print*,'Parameter d ',d, '[1/mm4]'
     do i = 1, total_point
         pointfam(i,1)=0
         numfam(i,1)=0
@@ -107,6 +107,6 @@ program main
     call set_conditions(condition, coord, disp, bforce, applied, delta, total_point,vel,pforce, horizon)
     ! call preprocess_with_SCF(horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,Theta)
     ! call iterate(max_iter,horizon, delta, volume, d, b, a, coord, disp, numfam, pointfam,nodefam,total_point, max_member, DSCF, SSCF, Theta, pforce, bforce, pforceold, vel, velhalf, velhalfold)
-    call time_integration(horizon, delta, volume, d, b, a, dens, coord, disp, vel, accel, pforce, bforce, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,Theta,100000000,1.0d-6)
+    call time_integration(horizon, delta, volume, d, b, a, dens, coord, disp, vel, accel, pforce, bforce, numfam, pointfam,nodefam,total_point, max_member,DSCF,SSCF,Theta,100000000,1.0d-7)
 end program main
 
